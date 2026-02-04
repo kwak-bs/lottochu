@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
+    "sourceMap": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "noFallthroughCasesInSwitch": false,
+    "baseUrl": ".",
+    "paths": {
+      "@lottochu/lotto": ["libs/lotto/src/index.ts"],
+      "@lottochu/statistics": ["libs/statistics/src/index.ts"],
+      "@lottochu/ai": ["libs/ai/src/index.ts"],
+      "@lottochu/telegram": ["libs/telegram/src/index.ts"],
+      "@lottochu/scheduler": ["libs/scheduler/src/index.ts"],
+      "@lottochu/shared": ["libs/shared/src/index.ts"],
+      "lotto": ["libs/lotto/src/index.ts"],
+      "shared": ["libs/shared/src/index.ts"],
+      "statistics": ["libs/statistics/src/index.ts"],
+      "ai": ["libs/ai/src/index.ts"],
+      "telegram": ["libs/telegram/src/index.ts"],
+      "scheduler": ["libs/scheduler/src/index.ts"]
+    }
+  },
+  "exclude": ["node_modules", "dist"]
+}
