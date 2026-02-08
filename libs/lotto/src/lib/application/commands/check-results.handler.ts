@@ -42,7 +42,7 @@ export class CheckResultsHandler implements ICommandHandler<CheckResultsCommand>
     private readonly drawRepository: DrawRepository,
     private readonly recommendationRepository: RecommendationRepository,
     private readonly resultRepository: ResultRepository,
-  ) {}
+  ) { }
 
   async execute(command: CheckResultsCommand): Promise<CheckResultsResult | null> {
     this.logger.log(`Checking results for draw #${command.drawId}...`);
