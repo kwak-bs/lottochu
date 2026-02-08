@@ -5,6 +5,7 @@ import {
   SyncDrawsResult,
   GenerateRecommendationCommand,
   GenerateRecommendationResult,
+  CheckResultsCommand,
 } from '../application/commands';
 import { DrawRepository } from '../infrastructure/repositories';
 import { TelegramService } from '@lottochu/telegram';
@@ -150,5 +151,57 @@ export class LottoController {
       );
     }
     return { ok: true, targetDrawId, sent: !!sent };
+  }
+
+  /**
+   * 직전 회차 결과 확인 후 텔레그램 발송 (수동 트리거)
+   * 1) 당첨 데이터 동기화 2) 최신 회차 결과 체크 3) 텔레그램 발송
+   */
+  @Post('result/check-and-send')
+  async checkResultAndSend(): Promise<{
+    ok: boolean;
+    drawId: number | null;
+    sent: boolean;
+    message?: string;
+  }> {
+    try {
+      await this.commandBus.execute(new SyncDrawsCommand());
+      const latestDraw = await this.drawRepository.findLatest();
+      if (!latestDraw) {
+        return { ok: true, drawId: null, sent: false, message: 'No draws found' };
+      }
+      const checkResult = await this.commandBus.execute(
+        new CheckResultsCommand(latestDraw.id),
+      );
+      if (!checkResult || checkResult.results.length === 0) {
+        return {
+          ok: true,
+          drawId: latestDraw.id,
+          sent: false,
+          message: `No recommendations for draw #${latestDraw.id}`,
+        };
+      }
+      const sent = await this.telegramService.sendResult({
+        drawId: checkResult.drawId,
+        winningNumbers: checkResult.winningNumbers,
+        bonusNumber: checkResult.bonusNumber,
+        results: checkResult.results.map((r) => ({
+          gameNumber: r.gameNumber,
+          type: r.type,
+          numbers: r.numbers,
+          matchedCount: r.matchedCount,
+          matchedNumbers: r.matchedNumbers,
+          hasBonus: r.hasBonus,
+          prizeRank: r.prizeRank,
+        })),
+      });
+      if (sent) {
+        this.logger.log(`Lotto result sent to Telegram for draw #${latestDraw.id}`);
+      }
+      return { ok: true, drawId: latestDraw.id, sent };
+    } catch (error) {
+      this.logger.error('Failed to check result and send:', error);
+      throw error;
+    }
   }
 }
