@@ -33,7 +33,7 @@ export class OllamaClient {
   ) {
     this.baseUrl =
       this.configService.get('OLLAMA_BASE_URL') || 'http://localhost:11434';
-    this.model = this.configService.get('OLLAMA_MODEL') || 'llama3.2:8b';
+    this.model = this.configService.get('OLLAMA_MODEL') || 'llama3.2:latest';
   }
 
   /**
