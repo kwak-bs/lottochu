@@ -127,6 +127,7 @@ export class DhPensionClient {
 
   /**
    * 최신 회차 번호 조회 (범위 API로 1~N 조회 후 최대 회차 반환)
+   * 루프 후 lastValid+1 회차 단독 조회 폴백: 구간 요청(301~400)이 실패해도 301 단건은 나올 수 있음
    */
   async getLatestDrawId(): Promise<number> {
     const maxAttempt = 500;
@@ -138,6 +139,15 @@ export class DhPensionClient {
       if (list.length === 0) break;
       lastValid = Math.max(...list.map((d) => d.drawId));
       if (list.length < end - start + 1) break;
+    }
+    // 폴백: 다음 회차 단독 조회 (동행복권 API가 구간은 비어도 단건은 반환하는 경우 대비)
+    try {
+      const nextList = await this.getDrawRange(lastValid + 1, lastValid + 1);
+      if (nextList.length > 0 && nextList[0].drawId === lastValid + 1) {
+        return nextList[0].drawId;
+      }
+    } catch {
+      // 무시하고 lastValid 반환
     }
     return lastValid;
   }

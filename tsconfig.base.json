@@ -17,20 +17,49 @@
     "noFallthroughCasesInSwitch": false,
     "baseUrl": ".",
     "paths": {
-      "@lottochu/lotto": ["libs/lotto/src/index.ts"],
-      "@lottochu/statistics": ["libs/statistics/src/index.ts"],
-      "@lottochu/ai": ["libs/ai/src/index.ts"],
-      "@lottochu/telegram": ["libs/telegram/src/index.ts"],
-      "@lottochu/pension": ["libs/pension/src/index.ts"],
-      "@lottochu/scheduler": ["libs/scheduler/src/index.ts"],
-      "@lottochu/shared": ["libs/shared/src/index.ts"],
-      "lotto": ["libs/lotto/src/index.ts"],
-      "shared": ["libs/shared/src/index.ts"],
-      "statistics": ["libs/statistics/src/index.ts"],
-      "ai": ["libs/ai/src/index.ts"],
-      "telegram": ["libs/telegram/src/index.ts"],
-      "scheduler": ["libs/scheduler/src/index.ts"]
+      "@lottochu/lotto": [
+        "libs/lotto/src/index.ts"
+      ],
+      "@lottochu/statistics": [
+        "libs/statistics/src/index.ts"
+      ],
+      "@lottochu/ai": [
+        "libs/ai/src/index.ts"
+      ],
+      "@lottochu/telegram": [
+        "libs/telegram/src/index.ts"
+      ],
+      "@lottochu/pension": [
+        "libs/pension/src/index.ts"
+      ],
+      "@lottochu/scheduler": [
+        "libs/scheduler/src/index.ts"
+      ],
+      "@lottochu/shared": [
+        "libs/shared/src/index.ts"
+      ],
+      "lotto": [
+        "libs/lotto/src/index.ts"
+      ],
+      "shared": [
+        "libs/shared/src/index.ts"
+      ],
+      "statistics": [
+        "libs/statistics/src/index.ts"
+      ],
+      "ai": [
+        "libs/ai/src/index.ts"
+      ],
+      "telegram": [
+        "libs/telegram/src/index.ts"
+      ],
+      "scheduler": [
+        "libs/scheduler/src/index.ts"
+      ]
     }
   },
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

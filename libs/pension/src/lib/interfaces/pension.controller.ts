@@ -11,6 +11,7 @@ import {
   SyncPensionDrawsResult,
   GeneratePensionRecommendationCommand,
   GeneratePensionRecommendationResult,
+  CheckPensionResultsCommand,
 } from '../application/commands';
 import { buildPensionRecommendationMessage } from '../application/pension-recommendation-message.builder';
 import { PensionDrawRepository } from '../infrastructure/repositories';
@@ -126,5 +127,55 @@ export class PensionController {
       this.logger.log(`Pension recommendation sent to Telegram for draw #${targetDrawId}`);
     }
     return { ok: true, targetDrawId, sent: !!sent };
+  }
+
+  /**
+   * 직전 회차 결과 확인 후 텔레그램 발송 (수동 트리거)
+   * 1) 당첨 데이터 동기화 2) 최신 회차 결과 체크 3) 텔레그램 발송
+   */
+  @Post('result/check-and-send')
+  async checkResultAndSend(): Promise<{
+    ok: boolean;
+    drawId: number | null;
+    sent: boolean;
+    message?: string;
+  }> {
+    try {
+      await this.commandBus.execute(new SyncPensionDrawsCommand());
+      const latest = await this.pensionDrawRepository.findLatest();
+      if (!latest) {
+        return { ok: true, drawId: null, sent: false, message: 'No pension draws found' };
+      }
+      const checkResult = await this.commandBus.execute(
+        new CheckPensionResultsCommand(latest.id),
+      );
+      if (!checkResult || checkResult.results.length === 0) {
+        return {
+          ok: true,
+          drawId: latest.id,
+          sent: false,
+          message: `No recommendations for draw #${latest.id}`,
+        };
+      }
+      const sent = await this.telegramService.sendPensionResult({
+        drawId: checkResult.drawId,
+        winningGroupNo: checkResult.winningGroupNo,
+        winningDigits: checkResult.winningDigits,
+        results: checkResult.results.map((r) => ({
+          gameNumber: r.gameNumber,
+          type: r.type,
+          groupNo: r.groupNo,
+          digits: r.digits,
+          prizeRank: r.prizeRank,
+        })),
+      });
+      if (sent) {
+        this.logger.log(`Pension result sent to Telegram for draw #${latest.id}`);
+      }
+      return { ok: true, drawId: latest.id, sent };
+    } catch (error) {
+      this.logger.error('Failed to check pension result and send:', error);
+      throw error;
+    }
   }
 }

@@ -38,44 +38,52 @@ export class GenerateRecommendationHandler
     const { targetDrawId } = command;
     this.logger.log(`Generating recommendations for draw #${targetDrawId}`);
 
-    const recommendations: Recommendation[] = [];
     const statisticalResults: { numbers: number[] }[] = [];
     const aiResults: { numbers: number[]; reasoning: string }[] = [];
 
-    // 1. 통계 기반 추천 3게임
+    // 1. 통계 기반 추천 3게임 (메모리만)
     const statisticalNumbers = await this.generateStatisticalNumbers(3);
     for (let i = 0; i < statisticalNumbers.length; i++) {
-      const rec = this.recommendationRepository.create({
-        targetDrawId,
-        type: RecommendationType.STATISTICAL,
-        gameNumber: i + 1,
-        numbers: statisticalNumbers[i],
-        aiReasoning: null,
-      });
-      recommendations.push(await this.recommendationRepository.save(rec));
       statisticalResults.push({ numbers: statisticalNumbers[i] });
       this.logger.log(
         `Statistical #${i + 1}: ${statisticalNumbers[i].join(', ')}`,
       );
     }
 
-    // 2. AI 기반 추천 2게임
+    // 2. AI 기반 추천 2게임 (Ollama 완료될 때까지 대기)
     const aiRecommendations = await this.generateAINumbers(2);
     for (let i = 0; i < aiRecommendations.length; i++) {
-      const aiRec = aiRecommendations[i];
-      const rec = this.recommendationRepository.create({
-        targetDrawId,
-        type: RecommendationType.AI,
-        gameNumber: i + 4, // 4, 5번 게임
-        numbers: aiRec.numbers,
-        aiReasoning: aiRec.reasoning,
-      });
-      recommendations.push(await this.recommendationRepository.save(rec));
-      aiResults.push(aiRec);
+      aiResults.push(aiRecommendations[i]);
       this.logger.log(
-        `AI #${i + 1}: ${aiRec.numbers.join(', ')} (${aiRec.reasoning})`,
+        `AI #${i + 1}: ${aiRecommendations[i].numbers.join(', ')} (${aiRecommendations[i].reasoning})`,
       );
     }
+
+    // 3. 통계+AI 모두 준비된 뒤 한 번에 DB 저장 (부분 저장 방지)
+    const toSave: Recommendation[] = [];
+    for (let i = 0; i < statisticalResults.length; i++) {
+      toSave.push(
+        this.recommendationRepository.create({
+          targetDrawId,
+          type: RecommendationType.STATISTICAL,
+          gameNumber: i + 1,
+          numbers: statisticalResults[i].numbers,
+          aiReasoning: null,
+        }),
+      );
+    }
+    for (let i = 0; i < aiResults.length; i++) {
+      toSave.push(
+        this.recommendationRepository.create({
+          targetDrawId,
+          type: RecommendationType.AI,
+          gameNumber: i + 4,
+          numbers: aiResults[i].numbers,
+          aiReasoning: aiResults[i].reasoning,
+        }),
+      );
+    }
+    const recommendations = await this.recommendationRepository.save(toSave);
 
     this.logger.log(
       `Generated ${recommendations.length} recommendations for draw #${targetDrawId}`,
