@@ -20,7 +20,7 @@ export enum RecommendationType {
 /**
  * 로또 번호 추천 엔티티
  */
-@Entity('recommendations')
+@Entity('lotto_recommendations')
 export class Recommendation {
   /** 고유 ID (UUID) */
   @PrimaryGeneratedColumn('uuid')

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { DhLotteryClient } from './clients/dhlottery.client';
+import { DhPensionClient } from './clients/dh-pension.client';
 
 @Module({
   imports: [
@@ -9,7 +10,7 @@ import { DhLotteryClient } from './clients/dhlottery.client';
       maxRedirects: 5,
     }),
   ],
-  providers: [DhLotteryClient],
-  exports: [HttpModule, DhLotteryClient],
+  providers: [DhLotteryClient, DhPensionClient],
+  exports: [HttpModule, DhLotteryClient, DhPensionClient],
 })
 export class SharedModule {}

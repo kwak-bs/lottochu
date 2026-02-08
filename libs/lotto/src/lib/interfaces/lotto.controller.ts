@@ -7,6 +7,8 @@ import {
   GenerateRecommendationResult,
 } from '../application/commands';
 import { DrawRepository } from '../infrastructure/repositories';
+import { TelegramService } from '@lottochu/telegram';
+import { getNextSaturday } from '@lottochu/shared';
 
 @Controller('lotto')
 export class LottoController {
@@ -15,7 +17,8 @@ export class LottoController {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly drawRepository: DrawRepository,
-  ) {}
+    private readonly telegramService: TelegramService,
+  ) { }
 
   /**
    * 동행복권에서 당첨 번호 동기화
@@ -95,5 +98,57 @@ export class LottoController {
 
     const command = new GenerateRecommendationCommand(targetDrawId);
     return this.commandBus.execute(command);
+  }
+
+  /**
+   * 추천 생성 후 텔레그램 전송 (수동 트리거)
+   */
+  @Post('recommend/send')
+  async generateAndSendRecommendation(
+    @Query('draw') drawId?: string,
+  ): Promise<{ ok: boolean; targetDrawId: number; sent: boolean }> {
+    const latest = await this.drawRepository.findLatest();
+    const targetDrawId = drawId
+      ? parseInt(drawId, 10)
+      : latest
+        ? latest.id + 1
+        : 1;
+
+    this.logger.log(
+      `Generating and sending lotto recommendation for draw #${targetDrawId}`,
+    );
+
+    const command = new GenerateRecommendationCommand(targetDrawId);
+    const result = await this.commandBus.execute(command);
+
+    const nextSaturday = getNextSaturday();
+    const drawDateStr = nextSaturday.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long',
+    });
+
+    const message = {
+      targetDrawId,
+      drawDate: drawDateStr,
+      statistical: result.statistical.map((s, i) => ({
+        gameNumber: i + 1,
+        numbers: s.numbers,
+      })),
+      ai: result.ai.map((a, i) => ({
+        gameNumber: i + result.statistical.length + 1,
+        numbers: a.numbers,
+        reasoning: a.reasoning,
+      })),
+    };
+
+    const sent = await this.telegramService.sendRecommendation(message);
+    if (sent) {
+      this.logger.log(
+        `Lotto recommendation sent to Telegram for draw #${targetDrawId}`,
+      );
+    }
+    return { ok: true, targetDrawId, sent: !!sent };
   }
 }

@@ -127,7 +127,9 @@ npm run start:dev
 
 ## 📊 데이터베이스 스키마
 
-### draws (로또 추첨 결과)
+### 로또 (lotto_draws, lotto_recommendations, lotto_results)
+
+**lotto_draws** (로또 추첨 결과)
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | id | int (PK) | 회차 번호 |
@@ -137,7 +139,7 @@ npm run start:dev
 | prize_1st ~ prize_3rd | bigint | 1~3등 당첨금 |
 | winners_1st ~ winners_3rd | int | 1~3등 당첨자 수 |
 
-### recommendations (추천 번호)
+**lotto_recommendations** (로또 추천 번호)
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | id | uuid (PK) | 고유 ID |
@@ -147,7 +149,7 @@ npm run start:dev
 | numbers | int[] | 추천 번호 6개 |
 | ai_reasoning | text | AI 추천 근거 |
 
-### results (당첨 결과)
+**lotto_results** (로또 당첨 결과)
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | id | uuid (PK) | 고유 ID |
@@ -157,10 +159,19 @@ npm run start:dev
 | has_bonus | boolean | 보너스 번호 일치 |
 | prize_rank | int | 당첨 등수 (1~5, null=낙첨) |
 
+### 연금복권 (pension_draws, pension_recommendations, pension_results)
+
+**pension_draws**: 회차(id), 추첨일, 조/6자리(당첨번호 nullable), 1~8등 당첨금·당첨자 수  
+**pension_recommendations**: target_draw_id, type, game_number, group_no, digits(6자리), ai_reasoning  
+**pension_results**: recommendation_id, prize_rank(1~8 또는 null)
+
+- 로또 테이블명 변경 마이그레이션: `docs/migrations/rename-lotto-tables.sql` (기존 DB 사용 시 실행 필요)
+
 ## 📝 개발 일지
 
 - [2026.02.03](docs/devlog_260203.md) - 프로젝트 초기 설정
 - [2026.02.04](docs/devlog_260204.md) - API 연동, AI 통합, Telegram 알림
+- [2026.02.05](docs/devlog_260205.md) - 연금복권 추가, 로또 테이블명 변경
 
 ## 📜 라이선스
 

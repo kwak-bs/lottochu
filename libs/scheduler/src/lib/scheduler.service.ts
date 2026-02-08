@@ -8,10 +8,19 @@ import {
   DrawRepository,
 } from '@lottochu/lotto';
 import {
+  SyncPensionDrawsCommand,
+  GeneratePensionRecommendationCommand,
+  CheckPensionResultsCommand,
+  PensionDrawRepository,
+  buildPensionRecommendationMessage,
+} from '@lottochu/pension';
+import {
   TelegramService,
   RecommendationMessage,
   ResultMessage,
+  PensionResultMessage,
 } from '@lottochu/telegram';
+import { getNextSaturday, getNextThursday } from '@lottochu/shared';
 
 @Injectable()
 export class SchedulerService {
@@ -20,18 +29,19 @@ export class SchedulerService {
   constructor(
     private readonly commandBus: CommandBus,
     private readonly drawRepository: DrawRepository,
+    private readonly pensionDrawRepository: PensionDrawRepository,
     private readonly telegramService: TelegramService,
   ) { }
 
   /**
-   * 매주 월요일 오후 12시 30분 - 이번 주 추천 번호 생성 및 발송
+   * 매주 월요일 오후 12시 30분 - 로또 추천 번호 생성 및 발송
    * Cron: 30 12 * * 1 (월요일 12:30)
    */
   @Cron('30 12 * * 1', {
-    name: 'weekly-recommendation',
+    name: 'weekly-lotto-recommendation',
     timeZone: 'Asia/Seoul',
   })
-  async handleWeeklyRecommendation() {
+  async handleWeeklyLottoRecommendation() {
     this.logger.log('🎰 Starting weekly recommendation generation...');
 
     try {
@@ -44,7 +54,7 @@ export class SchedulerService {
       const result = await this.commandBus.execute(command);
 
       // 텔레그램 발송
-      const nextSaturday = this.getNextSaturday();
+      const nextSaturday = getNextSaturday();
       const message: RecommendationMessage = {
         targetDrawId,
         drawDate: nextSaturday.toLocaleDateString('ko-KR', {
@@ -69,19 +79,59 @@ export class SchedulerService {
         this.logger.log(`✅ Weekly recommendation sent for draw #${targetDrawId}`);
       }
     } catch (error) {
-      this.logger.error('❌ Failed to generate weekly recommendation:', error);
+      this.logger.error('❌ Failed to generate weekly lotto recommendation:', error);
     }
   }
 
   /**
-   * 매주 토요일 오후 10시 - 당첨 결과 확인 및 발송
+   * 매주 월요일 오후 12시 30분 - 연금복권 추천 번호 생성 및 발송
+   * Cron: 30 12 * * 1 (월요일 12:30)
+   */
+  @Cron('30 12 * * 1', {
+    name: 'weekly-pension-recommendation',
+    timeZone: 'Asia/Seoul',
+  })
+  async handleWeeklyPensionRecommendation() {
+    this.logger.log('🎱 Starting weekly pension recommendation generation...');
+
+    try {
+      const latest = await this.pensionDrawRepository.findLatest();
+      const targetDrawId = latest ? latest.id + 1 : 1;
+
+      const command = new GeneratePensionRecommendationCommand(targetDrawId);
+      const result = await this.commandBus.execute(command);
+
+      const nextThursday = getNextThursday();
+      const drawDateStr = nextThursday.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long',
+      });
+      const message = buildPensionRecommendationMessage(
+        targetDrawId,
+        result,
+        drawDateStr,
+      );
+
+      const sent = await this.telegramService.sendPensionRecommendation(message);
+      if (sent) {
+        this.logger.log(`✅ Pension recommendation sent for draw #${targetDrawId}`);
+      }
+    } catch (error) {
+      this.logger.error('❌ Failed to generate weekly pension recommendation:', error);
+    }
+  }
+
+  /**
+   * 매주 토요일 오후 10시 - 로또 당첨 결과 확인 및 발송
    * Cron: 0 22 * * 6 (토요일 22:00)
    */
   @Cron('0 22 * * 6', {
-    name: 'weekly-result-check',
+    name: 'weekly-lotto-result-check',
     timeZone: 'Asia/Seoul',
   })
-  async handleWeeklyResultCheck() {
+  async handleWeeklyLottoResultCheck() {
     this.logger.log('🎯 Starting weekly result check...');
 
     try {
@@ -139,36 +189,98 @@ export class SchedulerService {
   }
 
   /**
-   * 매주 토요일 오후 10시 30분 - 통계 갱신
-   * Cron: 30 22 * * 6 (토요일 22:30)
+   * 매주 목요일 오후 10시 - 연금복권 당첨 결과 확인 및 발송
+   * Cron: 0 22 * * 4 (목요일 22:00)
    */
-  @Cron('30 22 * * 6', {
-    name: 'statistics-update',
+  @Cron('0 22 * * 4', {
+    name: 'weekly-pension-result-check',
     timeZone: 'Asia/Seoul',
   })
-  async handleStatisticsUpdate() {
-    this.logger.log('📊 Updating statistics...');
+  async handleWeeklyPensionResultCheck() {
+    this.logger.log('🎱 Starting weekly pension result check...');
 
     try {
-      // 동행복권에서 최신 데이터 동기화
-      const syncCommand = new SyncDrawsCommand();
-      await this.commandBus.execute(syncCommand);
+      await this.commandBus.execute(new SyncPensionDrawsCommand());
 
-      this.logger.log('✅ Statistics updated');
+      const latest = await this.pensionDrawRepository.findLatest();
+      if (!latest) {
+        this.logger.warn('No pension draws found');
+        return;
+      }
+
+      const checkCommand = new CheckPensionResultsCommand(latest.id);
+      const checkResult = await this.commandBus.execute(checkCommand);
+
+      if (!checkResult || checkResult.results.length === 0) {
+        this.logger.warn(`No pension recommendations for draw #${latest.id}`);
+        return;
+      }
+
+      const message: PensionResultMessage = {
+        drawId: checkResult.drawId,
+        winningGroupNo: checkResult.winningGroupNo,
+        winningDigits: checkResult.winningDigits,
+        results: checkResult.results.map(
+          (r: {
+            gameNumber: number;
+            type: string;
+            groupNo: number;
+            digits: string;
+            prizeRank: number | null;
+          }) => ({
+            gameNumber: r.gameNumber,
+            type: r.type,
+            groupNo: r.groupNo,
+            digits: r.digits,
+            prizeRank: r.prizeRank,
+          }),
+        ),
+      };
+
+      const sent = await this.telegramService.sendPensionResult(message);
+      if (sent) {
+        this.logger.log(`✅ Pension result sent for draw #${latest.id}`);
+      }
     } catch (error) {
-      this.logger.error('❌ Failed to update statistics:', error);
+      this.logger.error('❌ Failed to check weekly pension results:', error);
     }
   }
 
   /**
-   * 다음 토요일 날짜 계산
+   * 매주 토요일 오후 10시 30분 - 로또 통계 갱신
+   * Cron: 30 22 * * 6 (토요일 22:30)
    */
-  private getNextSaturday(): Date {
-    const today = new Date();
-    const dayOfWeek = today.getDay();
-    const daysUntilSaturday = (6 - dayOfWeek + 7) % 7 || 7;
-    const nextSaturday = new Date(today);
-    nextSaturday.setDate(today.getDate() + daysUntilSaturday);
-    return nextSaturday;
+  @Cron('30 22 * * 6', {
+    name: 'lotto-statistics-update',
+    timeZone: 'Asia/Seoul',
+  })
+  async handleLottoStatisticsUpdate() {
+    this.logger.log('📊 Updating lotto statistics...');
+
+    try {
+      await this.commandBus.execute(new SyncDrawsCommand());
+      this.logger.log('✅ Lotto statistics updated');
+    } catch (error) {
+      this.logger.error('❌ Failed to update lotto statistics:', error);
+    }
+  }
+
+  /**
+   * 매주 금요일 오후 12시 30분 - 연금복권 DB(통계) 갱신
+   * Cron: 30 12 * * 5 (금요일 12:30)
+   */
+  @Cron('30 12 * * 5', {
+    name: 'pension-statistics-update',
+    timeZone: 'Asia/Seoul',
+  })
+  async handlePensionStatisticsUpdate() {
+    this.logger.log('📊 Updating pension statistics...');
+
+    try {
+      await this.commandBus.execute(new SyncPensionDrawsCommand());
+      this.logger.log('✅ Pension statistics updated');
+    } catch (error) {
+      this.logger.error('❌ Failed to update pension statistics:', error);
+    }
   }
 }

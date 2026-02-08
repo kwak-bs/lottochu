@@ -12,7 +12,7 @@ import { Recommendation } from './recommendation.entity';
  * 추천 번호 결과 엔티티
  * 추천 번호와 실제 당첨 번호를 비교한 결과
  */
-@Entity('results')
+@Entity('lotto_results')
 export class Result {
   /** 고유 ID (UUID) */
   @PrimaryGeneratedColumn('uuid')

@@ -16,6 +16,7 @@ import { LottoController } from './interfaces';
 import { SharedModule } from '@lottochu/shared';
 import { StatisticsModule } from '@lottochu/statistics';
 import { AiModule } from '@lottochu/ai';
+import { TelegramModule } from '@lottochu/telegram';
 
 const CommandHandlers = [SyncDrawsHandler, GenerateRecommendationHandler, CheckResultsHandler];
 const Repositories = [DrawRepository, RecommendationRepository, ResultRepository];
@@ -27,9 +28,10 @@ const Repositories = [DrawRepository, RecommendationRepository, ResultRepository
     SharedModule,
     StatisticsModule,
     AiModule,
+    TelegramModule,
   ],
   controllers: [LottoController],
   providers: [...CommandHandlers, ...Repositories],
   exports: [TypeOrmModule, ...Repositories],
 })
-export class LottoModule {}
+export class LottoModule { }

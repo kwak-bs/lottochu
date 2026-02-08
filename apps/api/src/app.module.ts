@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { databaseConfig, appConfig } from '@lottochu/shared';
 import { LottoModule } from '@lottochu/lotto';
+import { PensionModule } from '@lottochu/pension';
 import { StatisticsModule } from '@lottochu/statistics';
 import { TelegramModule } from '@lottochu/telegram';
 import { SchedulerModule } from '@lottochu/scheduler';
@@ -37,6 +38,7 @@ import { SchedulerModule } from '@lottochu/scheduler';
 
     // Feature Modules
     LottoModule,
+    PensionModule,
     StatisticsModule,
     TelegramModule,
     SchedulerModule,

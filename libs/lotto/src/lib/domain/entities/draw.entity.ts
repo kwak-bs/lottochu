@@ -9,7 +9,7 @@ import {
  * 로또 추첨 결과 엔티티
  * 동행복권에서 가져온 역대 당첨 번호를 저장
  */
-@Entity('draws')
+@Entity('lotto_draws')
 export class Draw {
   /** 회차 번호 (PK) */
   @PrimaryColumn({ type: 'int' })
