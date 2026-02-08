@@ -84,10 +84,10 @@ export class SchedulerService {
   }
 
   /**
-   * 매주 월요일 오후 12시 30분 - 연금복권 추천 번호 생성 및 발송
-   * Cron: 30 12 * * 1 (월요일 12:30)
+   * 매주 금요일 오후 12시 30분 - 연금복권 추천 번호 생성 및 발송
+   * Cron: 30 12 * * 5 (금요일 12:30)
    */
-  @Cron('30 12 * * 1', {
+  @Cron('30 12 * * 5', {
     name: 'weekly-pension-recommendation',
     timeZone: 'Asia/Seoul',
   })
@@ -189,10 +189,10 @@ export class SchedulerService {
   }
 
   /**
-   * 매주 목요일 오후 10시 - 연금복권 당첨 결과 확인 및 발송
-   * Cron: 0 22 * * 4 (목요일 22:00)
+   * 매주 금요일 오후 12시 - 연금복권 당첨 결과 확인 및 발송
+   * Cron: 0 12 * * 5 (금요일 12:00)
    */
-  @Cron('0 22 * * 4', {
+  @Cron('0 12 * * 5', {
     name: 'weekly-pension-result-check',
     timeZone: 'Asia/Seoul',
   })
@@ -266,10 +266,10 @@ export class SchedulerService {
   }
 
   /**
-   * 매주 금요일 오후 12시 30분 - 연금복권 DB(통계) 갱신
-   * Cron: 30 12 * * 5 (금요일 12:30)
+   * 매주 금요일 오후 1시 - 연금복권 DB(통계) 갱신 후 텔레그램 알림
+   * Cron: 0 13 * * 5 (금요일 13:00)
    */
-  @Cron('30 12 * * 5', {
+  @Cron('0 13 * * 5', {
     name: 'pension-statistics-update',
     timeZone: 'Asia/Seoul',
   })
@@ -277,8 +277,18 @@ export class SchedulerService {
     this.logger.log('📊 Updating pension statistics...');
 
     try {
-      await this.commandBus.execute(new SyncPensionDrawsCommand());
+      const result = await this.commandBus.execute(new SyncPensionDrawsCommand());
       this.logger.log('✅ Pension statistics updated');
+
+      const msg =
+        result.syncedCount > 0
+          ? `🎱 <b>연금 당첨 데이터 동기화 완료</b>\n\n` +
+            `새로 반영: <b>${result.syncedCount}건</b> (회차 ${result.newDraws?.join(', ') ?? '-'})\n` +
+            `범위: ${result.startDrawId} ~ ${result.endDrawId}회`
+          : `🎱 <b>연금 당첨 데이터 동기화 완료</b>\n\n` +
+            `변경 없음 (최신 상태 유지)\n` +
+            `현재 최신: ${result.endDrawId}회`;
+      await this.telegramService.sendMessage(msg);
     } catch (error) {
       this.logger.error('❌ Failed to update pension statistics:', error);
     }
