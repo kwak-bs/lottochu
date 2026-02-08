@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {},
+  "files": [],
+  "references": [
+    {
+      "path": "./apps/api/tsconfig.app.json"
+    },
+    {
+      "path": "./apps/api/tsconfig.spec.json"
+    }
+  ]
+}
