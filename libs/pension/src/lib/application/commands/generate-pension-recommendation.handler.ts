@@ -56,31 +56,25 @@ export class GeneratePensionRecommendationHandler
       digits: string;
     }[] = [];
 
-    // 순위별(1·2·3순위) 3세트 추천 — 해당 순위 숫자가 없으면 하위 순위/랜덤 폴백
+    // 1순위 번호 1세트만 사용, 조 1~5 → 5게임 (5,000원)
     const rankedDigits = await this.statisticsService.getRecommendedPensionDigitsRanked();
-    this.logger.log(
-      `Recommended digits (ranked): 1st=${rankedDigits[0]}, 2nd=${rankedDigits[1]}, 3rd=${rankedDigits[2]}`,
-    );
+    const digits = rankedDigits[0];
+    this.logger.log(`Recommended digits (1st rank): ${digits}`);
 
-    // 15게임(15,000원): 1·2·3순위 번호 각각에 조 1~5 → 3×5 = 15게임
-    let gameNumber = 0;
-    for (let rank = 0; rank < 3; rank++) {
-      const digits = rankedDigits[rank];
-      for (let groupNo = 1; groupNo <= 5; groupNo++) {
-        gameNumber++;
-        const rec = this.recommendationRepository.create({
-          targetDrawId,
-          type: PensionRecommendationType.STATISTICAL,
-          gameNumber,
-          groupNo,
-          digits,
-          aiReasoning: null,
-        });
-        recommendations.push(
-          await this.pensionRecommendationRepository.save(rec),
-        );
-        statisticalResults.push({ gameNumber, groupNo, digits });
-      }
+    for (let gameNumber = 1; gameNumber <= 5; gameNumber++) {
+      const groupNo = gameNumber;
+      const rec = this.recommendationRepository.create({
+        targetDrawId,
+        type: PensionRecommendationType.STATISTICAL,
+        gameNumber,
+        groupNo,
+        digits,
+        aiReasoning: null,
+      });
+      recommendations.push(
+        await this.pensionRecommendationRepository.save(rec),
+      );
+      statisticalResults.push({ gameNumber, groupNo, digits });
     }
 
     return {
