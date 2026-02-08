@@ -261,28 +261,34 @@ export class TelegramService implements OnModuleInit {
     data: PensionRecommendationMessage,
   ): string {
     const lines: string[] = [
-      `🎱 <b>${data.targetDrawId}회 연금복권720+ 추천</b>`,
+      '━━━━━━━━━━━━━━━━━━━━',
+      `🎱 <b>연금복권720+ ${data.targetDrawId}회 추천</b>`,
+      '━━━━━━━━━━━━━━━━━━━━',
       '',
-      '📊 <b>통계 기반:</b>',
+      '📊 <b>통계 기반</b> (5게임 · 5,000원)',
+      '',
     ];
 
     for (const stat of data.statistical) {
       const emoji = this.getGameEmoji(stat.gameNumber);
-      lines.push(`${emoji} ${stat.groupNo}조 ${stat.digits}`);
+      lines.push(`  ${emoji} <b>${stat.groupNo}조</b>  ${stat.digits}`);
     }
 
     if (data.ai.length > 0) {
       lines.push('');
-      lines.push('🤖 <b>AI 추천:</b>');
+      lines.push('🤖 <b>AI 추천</b>');
+      lines.push('');
       for (const ai of data.ai) {
         const emoji = this.getGameEmoji(ai.gameNumber);
-        lines.push(`${emoji} ${ai.groupNo}조 ${ai.digits}`);
-        lines.push(`   └ <i>${ai.reasoning}</i>`);
+        lines.push(`  ${emoji} <b>${ai.groupNo}조</b>  ${ai.digits}`);
+        lines.push(`     <i>${ai.reasoning}</i>`);
+        lines.push('');
       }
     }
 
-    lines.push('');
-    lines.push(`📅 추첨일: ${data.drawDate}`);
+    lines.push('──────────────────');
+    lines.push(`📅 추첨일  ${data.drawDate}`);
+    lines.push('━━━━━━━━━━━━━━━━━━━━');
 
     return lines.join('\n');
   }
