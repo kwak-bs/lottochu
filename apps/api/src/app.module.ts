@@ -46,4 +46,4 @@ import { SchedulerModule } from '@lottochu/scheduler';
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }
