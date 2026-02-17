@@ -35,16 +35,40 @@ net start "PostgreSQL 17"
 
 ## 방법 3: pg_ctl로 직접 시작
 
-PostgreSQL이 **서비스로 등록되지 않은** 경우:
+PostgreSQL이 **서비스로 등록되지 않은** 경우 (또는 서비스 없이 수동으로 띄우고 싶을 때):
 
-1. **명령 프롬프트(관리자)** 실행
-2. 다음 명령 실행:
+### 시작
 
-```cmd
-"C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" start -D "C:\Program Files\PostgreSQL\17\data"
+**PowerShell:**
+
+```powershell
+& 'C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe' -D 'C:\Program Files\PostgreSQL\17\data' -l 'C:\Program Files\PostgreSQL\17\data\server.log' start
 ```
 
-3. 몇 초 후 pgAdmin에서 다시 접속 시도
+**CMD:**
+
+```cmd
+"C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D "C:\Program Files\PostgreSQL\17\data" -l "C:\Program Files\PostgreSQL\17\data\server.log" start
+```
+
+- **-D**: 데이터 디렉터리  
+- **-l**: 서버 로그 파일 (에러 확인 시 `C:\Program Files\PostgreSQL\17\data\server.log` 참고)
+
+몇 초 기다린 뒤 pgAdmin에서 다시 접속 시도.
+
+### 종료
+
+**PowerShell:**
+
+```powershell
+& 'C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe' -D 'C:\Program Files\PostgreSQL\17\data' stop
+```
+
+**CMD:**
+
+```cmd
+"C:\Program Files\PostgreSQL\17\bin\pg_ctl.exe" -D "C:\Program Files\PostgreSQL\17\data" stop
+```
 
 ---
 
