@@ -1,8 +1,8 @@
 # 🎰 Lottochu
 
-> AI 기반 로또 번호 추천 및 자동 알림 시스템
+> AI 기반 로또·연금복권 번호 추천 및 자동 알림 시스템
 
-매주 **통계 분석**과 **AI**를 활용해 로또 번호를 추천하고, **Telegram**으로 알림을 보내는 NestJS 기반 백엔드 시스템입니다.
+매주 **통계 분석**과 **AI**를 활용해 **로또**와 **연금복권** 번호를 추천하고, **Telegram**으로 알림을 보내는 NestJS 기반 백엔드 시스템입니다.
 
 ## ✨ 주요 기능
 
@@ -17,13 +17,13 @@
 - 번호 범위별 분포 고려
 
 ### 📱 자동 Telegram 알림
-- **월요일 12:30**: 이번 주 추천 번호 발송
-- **토요일 22:00**: 당첨 결과 및 성적 분석 발송
+- **로또**: 월요일 12:30 추천 발송, 토요일 22:00 당첨 결과 발송
+- **연금복권**: 금요일 12:00 당첨 결과, 12:30 다음 회차 추천 발송
 
 ### 🗄️ 데이터 관리
-- 동행복권 API 연동 (전체 회차 데이터)
+- 동행복권 API 연동 (로또·연금 당첨 데이터)
 - PostgreSQL 기반 데이터 저장
-- 2등/3등 당첨 정보까지 저장
+- 로또 2등/3등, 연금 1~8등 당첨 정보 저장
 
 ## 🏗️ 기술 스택
 
@@ -96,34 +96,64 @@ OLLAMA_MODEL=llama3.2:latest
 
 ```bash
 # 개발 서버 실행
-npx nx serve api
-
+npm run start
 # 또는
+npx nx serve api
+# watch 모드 (파일 변경 시 재시작)
 npm run start:dev
 ```
+
+### DB 연결이 안 될 때
+
+`connection timeout expired` (localhost:5432)가 나오면 PostgreSQL 서버가 꺼져 있는 상태입니다.  
+→ [PostgreSQL 서버 수동 시작 방법](docs/start-postgresql.md) 참고.
 
 ## 📡 API 엔드포인트
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
 | GET | `/` | 헬스 체크 |
-| POST | `/lotto/sync` | 로또 데이터 동기화 |
+
+**로또**
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/lotto/sync` | 당첨 데이터 동기화 (`?start=&end=`) |
 | GET | `/lotto/draws` | 전체 회차 조회 |
 | GET | `/lotto/draws/latest` | 최신 회차 조회 |
 | GET | `/lotto/status` | 동기화 상태 확인 |
-| POST | `/lotto/recommend` | 번호 추천 생성 |
+| POST | `/lotto/recommend` | 번호 추천 생성 (`?draw=`) |
+| POST | `/lotto/recommend/send` | 추천 생성 후 Telegram 발송 (수동) |
+| POST | `/lotto/result/check-and-send` | 최신 회차 결과 확인 후 Telegram 발송 (수동) |
+
+**연금복권**
+| Method | Endpoint | 설명 |
+|--------|----------|------|
+| POST | `/pension/sync` | 당첨 데이터 동기화 (`?start=&end=`) |
+| GET | `/pension/draws` | 전체 회차 조회 |
+| GET | `/pension/draws/latest` | 최신 회차 조회 |
+| GET | `/pension/status` | 동기화 상태 확인 |
+| POST | `/pension/recommend` | 번호 추천 생성 (`?draw=`) |
+| POST | `/pension/recommend/send` | 추천 생성 후 Telegram 발송 (수동) |
+| POST | `/pension/result/check-and-send` | 최신 회차 결과 확인 후 Telegram 발송 (수동) |
+
+**통계**
+| Method | Endpoint | 설명 |
+|--------|----------|------|
 | GET | `/statistics` | 전체 통계 조회 |
 | GET | `/statistics/candidates` | 추천 후보 번호 |
 | GET | `/statistics/most-frequent` | 최다 출현 번호 |
 | GET | `/statistics/least-frequent` | 최소 출현 번호 |
 
-## ⏰ 자동 스케줄
+## ⏰ 자동 스케줄 (Asia/Seoul)
 
-| Cron | 시간 | 작업 |
-|------|------|------|
-| `30 12 * * 1` | 월요일 12:30 | 번호 추천 → Telegram 발송 |
-| `0 22 * * 6` | 토요일 22:00 | 결과 체크 → Telegram 발송 |
-| `30 22 * * 6` | 토요일 22:30 | 통계 데이터 갱신 |
+| Cron | 요일·시간 | 작업 |
+|------|-----------|------|
+| `30 12 * * 1` | 월 12:30 | 로또 추천 → Telegram 발송 |
+| `0 22 * * 6` | 토 22:00 | 로또 결과 체크 → Telegram 발송 |
+| `30 22 * * 6` | 토 22:30 | 로또 당첨 데이터 동기화(통계용) |
+| `0 12 * * 5` | 금 12:00 | 연금 결과 체크 → Telegram 발송 |
+| `30 12 * * 5` | 금 12:30 | 연금 추천 → Telegram 발송 |
+| `0 13 * * 5` | 금 13:00 | 연금 당첨 데이터 동기화(통계용) |
 
 ## 📊 데이터베이스 스키마
 
@@ -172,6 +202,8 @@ npm run start:dev
 - [2026.02.03](docs/devlog_260203.md) - 프로젝트 초기 설정
 - [2026.02.04](docs/devlog_260204.md) - API 연동, AI 통합, Telegram 알림
 - [2026.02.05](docs/devlog_260205.md) - 연금복권 추가, 로또 테이블명 변경
+- [2026.02.08](docs/devlog_260208.md) - 연금 스케줄 금요일 통일, 추천 저장 로직, Ollama 모델명, 스케줄러 스킵 조건
+- [2026.02.17](docs/devlog_260217.md) - PostgreSQL 수동 시작(pg_ctl), 수동 트리거(결과/추천 발송)
 
 ## 📜 라이선스
 
