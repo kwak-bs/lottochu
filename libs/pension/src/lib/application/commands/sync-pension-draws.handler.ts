@@ -45,22 +45,16 @@ export class SyncPensionDrawsHandler
     this.logger.log(`Syncing pension draws from #${startId} to #${endId}`);
 
     const drawsFromApi = await this.dhPensionClient.getDrawRange(startId, endId);
-    const newDraws: number[] = [];
-    let syncedCount = 0;
+    const draws = drawsFromApi.map((info) => this.mapToDraw(info));
+    const upserted = await this.pensionDrawRepository.upsertMany(draws);
+    const newDraws = upserted.map((d) => d.id);
+    const syncedCount = newDraws.length;
 
-    for (const info of drawsFromApi) {
-      const exists = await this.pensionDrawRepository.exists(info.drawId);
-      if (exists) continue;
-
-      const draw = this.mapToDraw(info);
-      await this.pensionDrawRepository.save(draw);
-      newDraws.push(info.drawId);
-      syncedCount++;
+    if (syncedCount > 0) {
+      this.logger.log(`Pension sync complete. Synced ${syncedCount} new draws: ${newDraws.join(', ')}`);
+    } else {
+      this.logger.log('Pension sync complete. No new draws.');
     }
-
-    this.logger.log(
-      `Pension sync complete. Synced ${syncedCount} new draws.`,
-    );
 
     return {
       syncedCount,
