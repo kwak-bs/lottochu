@@ -34,12 +34,23 @@ export interface StatisticsSummary {
 export class StatisticsService {
   private readonly logger = new Logger(StatisticsService.name);
 
+  private cachedStats: StatisticsSummary | null = null;
+  private statsCacheTime = 0;
+  private cachedPensionFreq: { totalDraws: number; byPosition: Array<{ digit: number; count: number }[]> } | null = null;
+  private pensionFreqCacheTime = 0;
+  private readonly CACHE_TTL = 5 * 60 * 1000; // 5분
+
   constructor(private readonly dataSource: DataSource) { }
 
   /**
-   * 전체 통계 계산
+   * 전체 통계 계산 (5분 캐싱)
    */
   async calculateStatistics(): Promise<StatisticsSummary> {
+    const now = Date.now();
+    if (this.cachedStats && now - this.statsCacheTime < this.CACHE_TTL) {
+      return this.cachedStats;
+    }
+
     const draws = await this.dataSource.query<DrawEntity[]>(
       'SELECT id, numbers, bonus_number as "bonusNumber" FROM lotto_draws ORDER BY id ASC',
     );
@@ -82,12 +93,17 @@ export class StatisticsService {
       }))
       .sort((a, b) => b.count - a.count); // 빈도 높은 순
 
-    return {
+    const summary: StatisticsSummary = {
       totalDraws: draws.length,
       frequencies,
-      mostFrequent: frequencies.slice(0, 10), // 상위 10개
-      leastFrequent: frequencies.slice(-10).reverse(), // 하위 10개 (오름차순)
+      mostFrequent: frequencies.slice(0, 10),
+      leastFrequent: frequencies.slice(-10).reverse(),
     };
+
+    this.cachedStats = summary;
+    this.statsCacheTime = Date.now();
+
+    return summary;
   }
 
   /**
@@ -139,6 +155,11 @@ export class StatisticsService {
     totalDraws: number;
     byPosition: Array<{ digit: number; count: number }[]>;
   }> {
+    const now = Date.now();
+    if (this.cachedPensionFreq && now - this.pensionFreqCacheTime < this.CACHE_TTL) {
+      return this.cachedPensionFreq;
+    }
+
     const rows = await this.dataSource.query<{ digits: string }[]>(
       `SELECT digits FROM pension_draws WHERE digits IS NOT NULL AND LENGTH(digits) = 6`,
     );
@@ -173,10 +194,15 @@ export class StatisticsService {
         .sort((a, b) => b.count - a.count),
     );
 
-    return {
+    const result = {
       totalDraws: rows.length,
       byPosition: byPositionFormatted,
     };
+
+    this.cachedPensionFreq = result;
+    this.pensionFreqCacheTime = Date.now();
+
+    return result;
   }
 
   /**
