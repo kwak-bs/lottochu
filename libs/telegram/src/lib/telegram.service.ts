@@ -104,16 +104,22 @@ export class TelegramService implements OnModuleInit {
       return false;
     }
 
-    try {
-      await this.bot.telegram.sendMessage(this.chatId, message, {
-        parse_mode: 'HTML',
-      });
-      this.logger.log('Message sent to Telegram');
-      return true;
-    } catch (error) {
-      this.logger.error('Failed to send Telegram message:', error);
-      return false;
+    const maxRetries = 3;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.bot.telegram.sendMessage(this.chatId, message, {
+          parse_mode: 'HTML',
+        });
+        this.logger.log('Message sent to Telegram');
+        return true;
+      } catch (error) {
+        this.logger.error(`Failed to send Telegram message (attempt ${attempt}/${maxRetries}):`, error);
+        if (attempt < maxRetries) {
+          await new Promise((r) => setTimeout(r, 1000 * attempt));
+        }
+      }
     }
+    return false;
   }
 
   /**
@@ -150,6 +156,13 @@ export class TelegramService implements OnModuleInit {
     return this.sendMessage(message);
   }
 
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
+
   /**
    * 추천 번호 메시지 포맷팅
    */
@@ -171,7 +184,7 @@ export class TelegramService implements OnModuleInit {
     for (const ai of data.ai) {
       const emoji = this.getGameEmoji(ai.gameNumber);
       lines.push(`${emoji} ${ai.numbers.join(', ')}`);
-      lines.push(`   └ <i>${ai.reasoning}</i>`);
+      lines.push(`   └ <i>${this.escapeHtml(ai.reasoning)}</i>`);
     }
 
     lines.push('');
@@ -281,7 +294,7 @@ export class TelegramService implements OnModuleInit {
       for (const ai of data.ai) {
         const emoji = this.getGameEmoji(ai.gameNumber);
         lines.push(`  ${emoji} <b>${ai.groupNo}조</b>  ${ai.digits}`);
-        lines.push(`     <i>${ai.reasoning}</i>`);
+        lines.push(`     <i>${this.escapeHtml(ai.reasoning)}</i>`);
         lines.push('');
       }
     }
