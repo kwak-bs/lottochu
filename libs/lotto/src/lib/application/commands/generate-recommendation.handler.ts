@@ -51,12 +51,23 @@ export class GenerateRecommendationHandler
     }
 
     // 2. AI 기반 추천 2게임 (Ollama 완료될 때까지 대기)
-    const aiRecommendations = await this.generateAINumbers(2);
-    for (let i = 0; i < aiRecommendations.length; i++) {
-      aiResults.push(aiRecommendations[i]);
-      this.logger.log(
-        `AI #${i + 1}: ${aiRecommendations[i].numbers.join(', ')} (${aiRecommendations[i].reasoning})`,
-      );
+    try {
+      const aiRecommendations = await this.generateAINumbers(2);
+      for (let i = 0; i < aiRecommendations.length; i++) {
+        aiResults.push(aiRecommendations[i]);
+        this.logger.log(
+          `AI #${i + 1}: ${aiRecommendations[i].numbers.join(', ')} (${aiRecommendations[i].reasoning})`,
+        );
+      }
+    } catch (error) {
+      this.logger.warn('AI recommendation failed, using fallback random numbers:', error);
+      for (let i = 0; i < 2; i++) {
+        const numbers = this.pickRandomNumbers(
+          Array.from({ length: 45 }, (_, j) => j + 1),
+          6,
+        );
+        aiResults.push({ numbers, reasoning: 'AI 서버 오류로 랜덤 생성' });
+      }
     }
 
     // 3. 통계+AI 모두 준비된 뒤 한 번에 DB 저장 (부분 저장 방지)
