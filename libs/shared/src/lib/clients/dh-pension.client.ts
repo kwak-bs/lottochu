@@ -87,17 +87,8 @@ export class DhPensionClient {
       const chunkEnd = Math.min(start + INFO_PAGE_SIZE - 1, end);
       const url = `${PT720_INFO_URL}?srchStrPsltEpsd=${start}&srchEndPsltEpsd=${chunkEnd}`;
       try {
-        const response = await firstValueFrom(
-          this.httpService.get<DhPensionInfoApiResponse>(url, {
-            headers: {
-              'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-              Accept: 'application/json',
-            },
-          }),
-        );
-
-        const rows = response.data?.data?.result;
+        const data = await this.fetchWithRetry<DhPensionInfoApiResponse>(url);
+        const rows = data?.data?.result;
         if (!rows?.length) {
           start = chunkEnd + 1;
           continue;
@@ -114,7 +105,7 @@ export class DhPensionClient {
         }
       } catch (error) {
         this.logger.warn(
-          `Failed to fetch pension range ${start}-${chunkEnd}:`,
+          `Failed to fetch pension range ${start}-${chunkEnd} after retries:`,
           error,
         );
         start = chunkEnd + 1;
@@ -123,6 +114,28 @@ export class DhPensionClient {
 
     results.sort((a, b) => a.drawId - b.drawId);
     return results;
+  }
+
+  private async fetchWithRetry<T>(url: string, maxRetries = 3): Promise<T> {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<T>(url, {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              Accept: 'application/json',
+            },
+          }),
+        );
+        return response.data;
+      } catch (error) {
+        this.logger.warn(`API request failed (attempt ${attempt}/${maxRetries}): ${url}`);
+        if (attempt === maxRetries) throw error;
+        await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt - 1)));
+      }
+    }
+    throw new Error('Unreachable');
   }
 
   /**

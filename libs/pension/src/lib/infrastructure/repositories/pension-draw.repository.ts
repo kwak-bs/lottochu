@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { PensionDraw } from '../../domain/entities';
 
 @Injectable()
@@ -41,5 +41,12 @@ export class PensionDrawRepository {
   async exists(id: number): Promise<boolean> {
     const count = await this.repository.count({ where: { id } });
     return count > 0;
+  }
+
+  async upsertMany(draws: Partial<PensionDraw>[]): Promise<PensionDraw[]> {
+    if (draws.length === 0) return [];
+    await this.repository.upsert(draws, ['id']);
+    const ids = draws.map((d) => d.id).filter((id): id is number => id != null);
+    return this.repository.findBy({ id: In(ids) });
   }
 }

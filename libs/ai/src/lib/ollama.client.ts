@@ -91,7 +91,7 @@ export class OllamaClient {
           stream: false,
         },
         {
-          timeout: 60000, // 60초 타임아웃
+          timeout: 30000, // 30초 타임아웃
         },
       ),
     );

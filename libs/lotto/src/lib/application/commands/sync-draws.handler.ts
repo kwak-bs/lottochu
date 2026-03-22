@@ -46,32 +46,16 @@ export class SyncDrawsHandler implements ICommandHandler<SyncDrawsCommand> {
     const drawsFromApi = await this.dhLotteryClient.getDrawRange(startId, endId);
     this.logger.log(`Fetched ${drawsFromApi.length} draws from API`);
 
-    const newDraws: number[] = [];
-    let syncedCount = 0;
+    const draws = drawsFromApi.map((info) => this.mapToDraw(info));
+    const upserted = await this.drawRepository.upsertMany(draws);
+    const newDraws = upserted.map((d) => d.id);
+    const syncedCount = newDraws.length;
 
-    for (const drawInfo of drawsFromApi) {
-      // 이미 존재하는지 확인
-      const exists = await this.drawRepository.exists(drawInfo.drawId);
-      if (exists) {
-        this.logger.debug(`Draw #${drawInfo.drawId} already exists, skipping`);
-        continue;
-      }
-
-      // 저장
-      const draw = this.mapToDraw(drawInfo);
-      await this.drawRepository.save(draw);
-
-      newDraws.push(drawInfo.drawId);
-      syncedCount++;
-
-      this.logger.log(
-        `Synced draw #${drawInfo.drawId}: ${drawInfo.numbers.join(', ')} + ${drawInfo.bonusNumber}`,
-      );
+    if (syncedCount > 0) {
+      this.logger.log(`Synced ${syncedCount} new draws: ${newDraws.join(', ')}`);
+    } else {
+      this.logger.log('Synchronization complete. No new draws.');
     }
-
-    this.logger.log(
-      `Synchronization complete. Synced ${syncedCount} new draws.`,
-    );
 
     return {
       syncedCount,
