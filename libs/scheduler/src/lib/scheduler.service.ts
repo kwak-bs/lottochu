@@ -188,7 +188,16 @@ export class SchedulerService {
         drawId: checkResult.drawId,
         winningNumbers: checkResult.winningNumbers,
         bonusNumber: checkResult.bonusNumber,
-        results: checkResult.results.map((r) => ({
+        prizeByRank: checkResult.prizeByRank,
+        results: checkResult.results.map((r: {
+          gameNumber: number;
+          type: string;
+          numbers: number[];
+          matchedCount: number;
+          matchedNumbers: number[];
+          hasBonus: boolean;
+          prizeRank: number | null;
+        }) => ({
           gameNumber: r.gameNumber,
           type: r.type,
           numbers: r.numbers,
@@ -243,13 +252,22 @@ export class SchedulerService {
         drawId: checkResult.drawId,
         winningGroupNo: checkResult.winningGroupNo,
         winningDigits: checkResult.winningDigits,
-        results: checkResult.results.map((r) => ({
-          gameNumber: r.gameNumber,
-          type: r.type,
-          groupNo: r.groupNo,
-          digits: r.digits,
-          prizeRank: r.prizeRank,
-        })),
+        prizeByRank: checkResult.prizeByRank,
+        results: checkResult.results.map(
+          (r: {
+            gameNumber: number;
+            type: string;
+            groupNo: number;
+            digits: string;
+            prizeRank: number | null;
+          }) => ({
+            gameNumber: r.gameNumber,
+            type: r.type,
+            groupNo: r.groupNo,
+            digits: r.digits,
+            prizeRank: r.prizeRank,
+          }),
+        ),
       };
 
       const sent = await this.withRetry('Pension result send', () =>

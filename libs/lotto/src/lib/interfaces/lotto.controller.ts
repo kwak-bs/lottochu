@@ -185,6 +185,7 @@ export class LottoController {
         drawId: checkResult.drawId,
         winningNumbers: checkResult.winningNumbers,
         bonusNumber: checkResult.bonusNumber,
+        prizeByRank: checkResult.prizeByRank,
         results: checkResult.results.map((r) => ({
           gameNumber: r.gameNumber,
           type: r.type,

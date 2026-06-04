@@ -161,6 +161,7 @@ export class PensionController {
         drawId: checkResult.drawId,
         winningGroupNo: checkResult.winningGroupNo,
         winningDigits: checkResult.winningDigits,
+        prizeByRank: checkResult.prizeByRank,
         results: checkResult.results.map((r) => ({
           gameNumber: r.gameNumber,
           type: r.type,

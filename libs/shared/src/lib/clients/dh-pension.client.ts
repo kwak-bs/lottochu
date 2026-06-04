@@ -139,30 +139,48 @@ export class DhPensionClient {
   }
 
   /**
-   * 최신 회차 번호 조회 (범위 API로 1~N 조회 후 최대 회차 반환)
-   * 루프 후 lastValid+1 회차 단독 조회 폴백: 구간 요청(301~400)이 실패해도 301 단건은 나올 수 있음
+   * 최신 회차 번호 조회
+   * - 단건 조회 기반으로 존재 여부를 확인해 최신 회차를 이진 탐색으로 찾는다.
+   * - 일부 구간 조회가 비어도 단건 조회는 성공하는 API 특성을 우회한다.
    */
   async getLatestDrawId(): Promise<number> {
-    const maxAttempt = 500;
-    const step = 100;
-    let lastValid = 1;
-    for (let start = 1; start <= maxAttempt; start += step) {
-      const end = Math.min(start + step - 1, maxAttempt);
-      const list = await this.getDrawRange(start, end);
-      if (list.length === 0) break;
-      lastValid = Math.max(...list.map((d) => d.drawId));
-      if (list.length < end - start + 1) break;
+    const maxAttempt = 5000;
+
+    const firstExists = await this.existsDraw(1);
+    if (!firstExists) {
+      return 1;
     }
-    // 폴백: 다음 회차 단독 조회 (동행복권 API가 구간은 비어도 단건은 반환하는 경우 대비)
-    try {
-      const nextList = await this.getDrawRange(lastValid + 1, lastValid + 1);
-      if (nextList.length > 0 && nextList[0].drawId === lastValid + 1) {
-        return nextList[0].drawId;
+
+    // 1) 상한 찾기 (1,2,4,8... 방식)
+    let low = 1;
+    let high = 1;
+    while (high < maxAttempt) {
+      const exists = await this.existsDraw(high);
+      if (!exists) {
+        break;
       }
-    } catch {
-      // 무시하고 lastValid 반환
+      low = high;
+      high = Math.min(high * 2, maxAttempt);
     }
-    return lastValid;
+
+    // maxAttempt에서도 존재하면 그 값을 최신으로 간주
+    const maxExists = await this.existsDraw(high);
+    if (high === maxAttempt && maxExists) {
+      return maxAttempt;
+    }
+
+    // 2) low(존재) ~ high(미존재) 범위 이진 탐색
+    while (low < high) {
+      const mid = Math.floor((low + high + 1) / 2);
+      const exists = await this.existsDraw(mid);
+      if (exists) {
+        low = mid;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    return low;
   }
 
   /**
@@ -237,5 +255,33 @@ export class DhPensionClient {
     }
 
     return result.sort((a, b) => a.drawId - b.drawId);
+  }
+
+  /**
+   * 특정 회차 존재 여부 확인 (단건 조회, 간단 재시도)
+   */
+  private async existsDraw(drawId: number): Promise<boolean> {
+    const url = `${PT720_INFO_URL}?srchStrPsltEpsd=${drawId}&srchEndPsltEpsd=${drawId}`;
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await firstValueFrom(
+          this.httpService.get<DhPensionInfoApiResponse>(url, {
+            headers: {
+              'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              Accept: 'application/json',
+            },
+          }),
+        );
+
+        const rows = response.data?.data?.result ?? [];
+        return rows.some((row) => row.psltEpsd === drawId);
+      } catch (error) {
+        this.logger.warn(`Failed to check pension draw #${drawId} (attempt ${attempt + 1})`);
+      }
+    }
+
+    return false;
   }
 }

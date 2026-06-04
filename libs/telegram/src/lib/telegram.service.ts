@@ -19,6 +19,13 @@ export interface ResultMessage {
   drawId: number;
   winningNumbers: number[];
   bonusNumber: number;
+  prizeByRank: {
+    1: string | null;
+    2: string | null;
+    3: string | null;
+    4: string | null;
+    5: string | null;
+  };
   results: {
     gameNumber: number;
     type: string;
@@ -52,6 +59,16 @@ export interface PensionResultMessage {
   drawId: number;
   winningGroupNo: number | null;
   winningDigits: string | null;
+  prizeByRank: {
+    1: string | null;
+    2: string | null;
+    3: string | null;
+    4: string | null;
+    5: string | null;
+    6: string | null;
+    7: string | null;
+    8: string | null;
+  };
   results: {
     gameNumber: number;
     type: string;
@@ -213,8 +230,9 @@ export class TelegramService implements OnModuleInit {
       for (const r of statResults) {
         const emoji = this.getGameEmoji(r.gameNumber);
         const matchEmoji = this.getMatchEmoji(r.matchedCount, r.prizeRank);
+        const prizeText = this.getLottoPrizeText(r.prizeRank, data.prizeByRank);
         lines.push(
-          `${emoji} ${r.numbers.join(', ')} → ${matchEmoji} ${r.matchedCount}개`,
+          `${emoji} ${r.numbers.join(', ')} → ${matchEmoji} ${r.matchedCount}개${prizeText}`,
         );
       }
     }
@@ -228,7 +246,7 @@ export class TelegramService implements OnModuleInit {
       for (const r of aiResults) {
         const emoji = this.getGameEmoji(r.gameNumber);
         const matchEmoji = this.getMatchEmoji(r.matchedCount, r.prizeRank);
-        const prizeText = r.prizeRank ? ` (${r.prizeRank}등!)` : '';
+        const prizeText = this.getLottoPrizeText(r.prizeRank, data.prizeByRank);
         lines.push(
           `${emoji} ${r.numbers.join(', ')} → ${matchEmoji} ${r.matchedCount}개${prizeText}`,
         );
@@ -265,6 +283,35 @@ export class TelegramService implements OnModuleInit {
     if (prizeRank === 5) return '⚪';
     if (matchedCount === 0) return '❌';
     return '⚪';
+  }
+
+  private getLottoPrizeText(
+    prizeRank: number | null,
+    prizeByRank: ResultMessage['prizeByRank'],
+  ): string {
+    if (prizeRank == null) return '';
+    const prize = prizeByRank[prizeRank as keyof ResultMessage['prizeByRank']];
+    const moneyText = this.formatMoney(prize);
+    if (!moneyText) return ` (${prizeRank}등)`;
+    return ` (${prizeRank}등 · ${moneyText})`;
+  }
+
+  private getPensionPrizeText(
+    prizeRank: number | null,
+    prizeByRank: PensionResultMessage['prizeByRank'],
+  ): string {
+    if (prizeRank == null) return '낙첨';
+    const prize = prizeByRank[prizeRank as keyof PensionResultMessage['prizeByRank']];
+    const moneyText = this.formatMoney(prize);
+    if (!moneyText) return `${prizeRank}등`;
+    return `${prizeRank}등 · ${moneyText}`;
+  }
+
+  private formatMoney(value: string | null): string | null {
+    if (value == null) return null;
+    const amount = Number(value);
+    if (!Number.isFinite(amount)) return null;
+    return `${amount.toLocaleString('ko-KR')}원`;
   }
 
   /**
@@ -328,8 +375,8 @@ export class TelegramService implements OnModuleInit {
       lines.push('📊 <b>통계 기반:</b>');
       for (const r of statResults) {
         const emoji = this.getGameEmoji(r.gameNumber);
-        const rankText = r.prizeRank ? ` (${r.prizeRank}등!)` : '';
-        lines.push(`${emoji} ${r.groupNo}조 ${r.digits} → ${rankText || '낙첨'}`);
+        const prizeText = this.getPensionPrizeText(r.prizeRank, data.prizeByRank);
+        lines.push(`${emoji} ${r.groupNo}조 ${r.digits} → ${prizeText}`);
       }
     }
 
@@ -340,8 +387,8 @@ export class TelegramService implements OnModuleInit {
       lines.push('🤖 <b>AI 추천:</b>');
       for (const r of aiResults) {
         const emoji = this.getGameEmoji(r.gameNumber);
-        const rankText = r.prizeRank ? ` (${r.prizeRank}등!)` : '';
-        lines.push(`${emoji} ${r.groupNo}조 ${r.digits} → ${rankText || '낙첨'}`);
+        const prizeText = this.getPensionPrizeText(r.prizeRank, data.prizeByRank);
+        lines.push(`${emoji} ${r.groupNo}조 ${r.digits} → ${prizeText}`);
       }
     }
 
