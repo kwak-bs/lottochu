@@ -29,6 +29,13 @@ export interface CheckResultsResult {
   drawId: number;
   winningNumbers: number[];
   bonusNumber: number;
+  prizeByRank: {
+    1: string | null;
+    2: string | null;
+    3: string | null;
+    4: string;
+    5: string;
+  };
   results: RecommendationResult[];
   totalRecommendations: number;
   bestRank: number | null;
@@ -122,6 +129,13 @@ export class CheckResultsHandler implements ICommandHandler<CheckResultsCommand>
       drawId: command.drawId,
       winningNumbers: draw.numbers,
       bonusNumber: draw.bonusNumber,
+      prizeByRank: {
+        1: draw.prize1st,
+        2: draw.prize2nd,
+        3: draw.prize3rd,
+        4: '50000',
+        5: '5000',
+      },
       results,
       totalRecommendations: recommendations.length,
       bestRank,

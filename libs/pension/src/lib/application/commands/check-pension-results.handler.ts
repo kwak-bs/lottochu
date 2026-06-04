@@ -21,6 +21,16 @@ export interface CheckPensionResultsResult {
   drawId: number;
   winningGroupNo: number | null;
   winningDigits: string | null;
+  prizeByRank: {
+    1: string | null;
+    2: string | null;
+    3: string | null;
+    4: string | null;
+    5: string | null;
+    6: string | null;
+    7: string | null;
+    8: string | null;
+  };
   results: PensionRecommendationResult[];
   totalRecommendations: number;
   bestRank: number | null;
@@ -100,6 +110,16 @@ export class CheckPensionResultsHandler
       drawId: command.drawId,
       winningGroupNo: draw.groupNo,
       winningDigits: draw.digits,
+      prizeByRank: {
+        1: draw.prize1st,
+        2: draw.prize2nd,
+        3: draw.prize3rd,
+        4: draw.prize4th,
+        5: draw.prize5th,
+        6: draw.prize6th,
+        7: draw.prize7th,
+        8: draw.prize8th,
+      },
       results,
       totalRecommendations: recommendations.length,
       bestRank,

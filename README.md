@@ -11,10 +11,14 @@
 - 하위 20개 번호 제외 후 랜덤 추출
 - 1~45 중 출현 빈도 높은 번호 위주 추천
 
-### 🤖 AI 기반 추천 (2게임)
+### 🤖 AI 기반 추천 (로또 2게임)
 - Ollama (llama3.2) 활용
 - 최근 회차 패턴 분석
 - 번호 범위별 분포 고려
+
+### 🎱 연금 추천
+- 통계 기반 5게임 생성 (조 1~5 고정)
+- 연금 자리수 빈도 기반 추천 번호 생성
 
 ### 📱 자동 Telegram 알림
 - **로또**: 월요일 12:30 추천 발송, 토요일 22:00 당첨 결과 발송
@@ -88,7 +92,7 @@ TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
 
 # Ollama
-OLLAMA_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=llama3.2:latest
 ```
 
