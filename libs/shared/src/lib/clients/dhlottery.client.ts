@@ -83,6 +83,7 @@ export class DhLotteryClient {
 
       const response = await firstValueFrom(
         this.httpService.get<DhLotteryAllResponse>(this.allDrawsUrl, {
+          timeout: 15000,
           headers: {
             'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -91,7 +92,10 @@ export class DhLotteryClient {
         }),
       );
 
-      const draws = response.data.data.list;
+      const draws = response.data?.data?.list;
+      if (!Array.isArray(draws) || draws.length === 0) {
+        throw new Error('DhLottery API returned no draw data');
+      }
       this.logger.log(`Fetched ${draws.length} draws from API`);
 
       // 캐시 초기화 및 저장
@@ -146,10 +150,7 @@ export class DhLotteryClient {
   /**
    * 범위 내 모든 회차 조회
    */
-  async getDrawRange(
-    startId: number,
-    endId: number,
-  ): Promise<LottoDrawInfo[]> {
+  async getDrawRange(startId: number, endId: number): Promise<LottoDrawInfo[]> {
     const allDraws = await this.getAllDraws();
 
     return allDraws.filter((d) => d.drawId >= startId && d.drawId <= endId);

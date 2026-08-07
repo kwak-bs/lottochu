@@ -9,13 +9,13 @@ import { firstValueFrom } from 'rxjs';
  */
 export interface DhPensionInfoRow {
   rnum: number;
-  wnSqNo: number;       // 1~7: 1~7등, 21: 보너스(8등)
+  wnSqNo: number; // 1~7: 1~7등, 21: 보너스(8등)
   wnAmt: number;
-  wnBndNo: string | null;  // 1등 조 번호 (1~5)
-  wnRnkVl: string;      // 당첨 번호 값 (1등은 6자리, 2~7등은 끝 N자리)
-  psltRflYmd: string;   // 추첨일 YYYYMMDD
-  psltEpsd: number;     // 회차
-  psltSn: number;       // 1~8 (8=보너스)
+  wnBndNo: string | null; // 1등 조 번호 (1~5)
+  wnRnkVl: string; // 당첨 번호 값 (1등은 6자리, 2~7등은 끝 N자리)
+  psltRflYmd: string; // 추첨일 YYYYMMDD
+  psltEpsd: number; // 회차
+  psltSn: number; // 1~8 (8=보너스)
   ltGdsCd: string;
 }
 
@@ -56,13 +56,12 @@ export interface PensionDrawInfo {
   drawDate: Date | null;
   groupNo: number | null;
   digits: string | null;
-  prizes: (number | null)[];   // index 0 = 1등, .. 7 = 8등
-  winners: (number | null)[];  // index 0 = 1등, .. (WnInfo API에서만 채움)
+  prizes: (number | null)[]; // index 0 = 1등, .. 7 = 8등
+  winners: (number | null)[]; // index 0 = 1등, .. (WnInfo API에서만 채움)
 }
 
-const PT720_INFO_URL = 'https://www.dhlottery.co.kr/pt720/selectPstPt720Info.do';
-const PT720_WN_INFO_URL = 'https://www.dhlottery.co.kr/pt720/selectPstPt720WnInfo.do';
-
+const PT720_INFO_URL =
+  'https://www.dhlottery.co.kr/pt720/selectPstPt720Info.do';
 /** 한 번에 조회할 최대 회차 수 (API 안정성) */
 const INFO_PAGE_SIZE = 100;
 
@@ -70,7 +69,7 @@ const INFO_PAGE_SIZE = 100;
 export class DhPensionClient {
   private readonly logger = new Logger(DhPensionClient.name);
 
-  constructor(private readonly httpService: HttpService) { }
+  constructor(private readonly httpService: HttpService) {}
 
   /**
    * 회차 범위 조회 (selectPstPt720Info.do) — 한 번에 여러 회차, 1등 당첨번호·추첨일 포함
@@ -121,6 +120,7 @@ export class DhPensionClient {
       try {
         const response = await firstValueFrom(
           this.httpService.get<T>(url, {
+            timeout: 15000,
             headers: {
               'User-Agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -130,7 +130,9 @@ export class DhPensionClient {
         );
         return response.data;
       } catch (error) {
-        this.logger.warn(`API request failed (attempt ${attempt}/${maxRetries}): ${url}`);
+        this.logger.warn(
+          `API request failed (attempt ${attempt}/${maxRetries}): ${url}`,
+        );
         if (attempt === maxRetries) throw error;
         await new Promise((r) => setTimeout(r, 300 * Math.pow(2, attempt - 1)));
       }
@@ -217,8 +219,8 @@ export class DhPensionClient {
 
       let groupNo: number | null = null;
       let digits: string | null = null;
-      const prizes: (number | null)[] = new Array(8).fill(null);
-      const winners: (number | null)[] = new Array(8).fill(null);
+      const prizes: (number | null)[] = Array.from({ length: 8 }, () => null);
+      const winners: (number | null)[] = Array.from({ length: 8 }, () => null);
 
       for (const row of list) {
         if (row.psltSn === 1) {
@@ -267,6 +269,7 @@ export class DhPensionClient {
       try {
         const response = await firstValueFrom(
           this.httpService.get<DhPensionInfoApiResponse>(url, {
+            timeout: 15000,
             headers: {
               'User-Agent':
                 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -278,10 +281,15 @@ export class DhPensionClient {
         const rows = response.data?.data?.result ?? [];
         return rows.some((row) => row.psltEpsd === drawId);
       } catch (error) {
-        this.logger.warn(`Failed to check pension draw #${drawId} (attempt ${attempt + 1})`);
+        this.logger.warn(
+          `Failed to check pension draw #${drawId} (attempt ${attempt + 1})`,
+        );
+        if (attempt === 1) {
+          throw error;
+        }
       }
     }
 
-    return false;
+    throw new Error(`Failed to check pension draw #${drawId}`);
   }
 }
