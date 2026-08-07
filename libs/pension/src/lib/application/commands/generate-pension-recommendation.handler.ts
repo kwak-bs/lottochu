@@ -31,15 +31,18 @@ export interface PensionAiRecommendationItem {
 
 @CommandHandler(GeneratePensionRecommendationCommand)
 export class GeneratePensionRecommendationHandler
-  implements ICommandHandler<GeneratePensionRecommendationCommand> {
-  private readonly logger = new Logger(GeneratePensionRecommendationHandler.name);
+  implements ICommandHandler<GeneratePensionRecommendationCommand>
+{
+  private readonly logger = new Logger(
+    GeneratePensionRecommendationHandler.name,
+  );
 
   constructor(
     @InjectRepository(PensionRecommendation)
     private readonly recommendationRepository: Repository<PensionRecommendation>,
     private readonly pensionRecommendationRepository: PensionRecommendationRepository,
     private readonly statisticsService: StatisticsService,
-  ) { }
+  ) {}
 
   async execute(
     command: GeneratePensionRecommendationCommand,
@@ -49,7 +52,6 @@ export class GeneratePensionRecommendationHandler
       `Generating pension recommendations for draw #${targetDrawId}`,
     );
 
-    const recommendations: PensionRecommendation[] = [];
     const statisticalResults: {
       gameNumber: number;
       groupNo: number;
@@ -57,10 +59,12 @@ export class GeneratePensionRecommendationHandler
     }[] = [];
 
     // 1순위 번호 1세트만 사용, 조 1~5 → 5게임 (5,000원)
-    const rankedDigits = await this.statisticsService.getRecommendedPensionDigitsRanked();
+    const rankedDigits =
+      await this.statisticsService.getRecommendedPensionDigitsRanked();
     const digits = rankedDigits[0];
     this.logger.log(`Recommended digits (1st rank): ${digits}`);
 
+    const toSave: PensionRecommendation[] = [];
     for (let gameNumber = 1; gameNumber <= 5; gameNumber++) {
       const groupNo = gameNumber;
       const rec = this.recommendationRepository.create({
@@ -71,11 +75,12 @@ export class GeneratePensionRecommendationHandler
         digits,
         aiReasoning: null,
       });
-      recommendations.push(
-        await this.pensionRecommendationRepository.save(rec),
-      );
+      toSave.push(rec);
       statisticalResults.push({ gameNumber, groupNo, digits });
     }
+
+    const recommendations =
+      await this.pensionRecommendationRepository.saveMany(toSave);
 
     return {
       targetDrawId,
