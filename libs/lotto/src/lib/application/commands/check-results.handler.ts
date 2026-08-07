@@ -42,16 +42,20 @@ export interface CheckResultsResult {
 }
 
 @CommandHandler(CheckResultsCommand)
-export class CheckResultsHandler implements ICommandHandler<CheckResultsCommand> {
+export class CheckResultsHandler
+  implements ICommandHandler<CheckResultsCommand>
+{
   private readonly logger = new Logger(CheckResultsHandler.name);
 
   constructor(
     private readonly drawRepository: DrawRepository,
     private readonly recommendationRepository: RecommendationRepository,
     private readonly resultRepository: ResultRepository,
-  ) { }
+  ) {}
 
-  async execute(command: CheckResultsCommand): Promise<CheckResultsResult | null> {
+  async execute(
+    command: CheckResultsCommand,
+  ): Promise<CheckResultsResult | null> {
     this.logger.log(`Checking results for draw #${command.drawId}...`);
 
     // 1. 당첨 번호 조회
@@ -62,44 +66,49 @@ export class CheckResultsHandler implements ICommandHandler<CheckResultsCommand>
     }
 
     // 2. 해당 회차 추천 조회
-    const recommendations = await this.recommendationRepository.findByDrawId(command.drawId);
+    const recommendations = await this.recommendationRepository.findByDrawId(
+      command.drawId,
+    );
     if (recommendations.length === 0) {
       this.logger.warn(`No recommendations found for draw #${command.drawId}`);
       return null;
     }
 
-    this.logger.log(`Found ${recommendations.length} recommendations for draw #${command.drawId}`);
+    this.logger.log(
+      `Found ${recommendations.length} recommendations for draw #${command.drawId}`,
+    );
 
     // 3. 각 추천에 대해 결과 계산 및 저장
     const results: RecommendationResult[] = [];
     let bestRank: number | null = null;
 
     for (const rec of recommendations) {
-      // 이미 결과가 있는지 확인
-      const existingResult = await this.resultRepository.exists(rec.id);
-      if (existingResult) {
-        this.logger.debug(`Result already exists for recommendation ${rec.id}`);
-        continue;
+      const existingResult = await this.resultRepository.findByRecommendationId(
+        rec.id,
+      );
+
+      const matchedNumbers =
+        existingResult?.matchedNumbers ??
+        rec.numbers.filter((n) => draw.numbers.includes(n));
+      const matchedCount =
+        existingResult?.matchedCount ?? matchedNumbers.length;
+      const hasBonus =
+        existingResult?.hasBonus ?? rec.numbers.includes(draw.bonusNumber);
+      const prizeRank =
+        existingResult?.prizeRank ??
+        this.calculatePrizeRank(matchedCount, hasBonus);
+
+      if (!existingResult) {
+        const result: Partial<Result> = {
+          recommendationId: rec.id,
+          matchedCount,
+          matchedNumbers,
+          hasBonus,
+          prizeRank,
+        };
+
+        await this.resultRepository.save(result);
       }
-
-      // 일치 번호 계산
-      const matchedNumbers = rec.numbers.filter((n) => draw.numbers.includes(n));
-      const matchedCount = matchedNumbers.length;
-      const hasBonus = rec.numbers.includes(draw.bonusNumber);
-
-      // 당첨 등수 계산
-      const prizeRank = this.calculatePrizeRank(matchedCount, hasBonus);
-
-      // 결과 저장
-      const result: Partial<Result> = {
-        recommendationId: rec.id,
-        matchedCount,
-        matchedNumbers,
-        hasBonus,
-        prizeRank,
-      };
-
-      await this.resultRepository.save(result);
 
       // 결과 목록에 추가
       results.push({
@@ -150,7 +159,10 @@ export class CheckResultsHandler implements ICommandHandler<CheckResultsCommand>
    * - 4등: 4개 일치
    * - 5등: 3개 일치
    */
-  private calculatePrizeRank(matchedCount: number, hasBonus: boolean): number | null {
+  private calculatePrizeRank(
+    matchedCount: number,
+    hasBonus: boolean,
+  ): number | null {
     if (matchedCount === 6) return 1;
     if (matchedCount === 5 && hasBonus) return 2;
     if (matchedCount === 5) return 3;
