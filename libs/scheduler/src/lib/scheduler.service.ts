@@ -54,7 +54,8 @@ export class SchedulerService {
       const targetDrawId = latestDraw ? latestDraw.id + 1 : 1;
 
       // 이미 수동으로 넣어둔 데이터가 있으면 스킵
-      const existing = await this.recommendationRepository.findByDrawId(targetDrawId);
+      const existing =
+        await this.recommendationRepository.findByDrawId(targetDrawId);
       if (existing.length > 0) {
         this.logger.log(
           `⏭️ Draw #${targetDrawId} already has ${existing.length} recommendations, skipping`,
@@ -76,25 +77,34 @@ export class SchedulerService {
           day: 'numeric',
           weekday: 'long',
         }),
-        statistical: result.statistical.map((s: { numbers: number[] }, i: number) => ({
-          gameNumber: i + 1,
-          numbers: s.numbers,
-        })),
-        ai: result.ai.map((a: { numbers: number[]; reasoning: string }, i: number) => ({
-          gameNumber: i + 4,
-          numbers: a.numbers,
-          reasoning: a.reasoning,
-        })),
+        statistical: result.statistical.map(
+          (s: { numbers: number[] }, i: number) => ({
+            gameNumber: i + 1,
+            numbers: s.numbers,
+          }),
+        ),
+        ai: result.ai.map(
+          (a: { numbers: number[]; reasoning: string }, i: number) => ({
+            gameNumber: i + 4,
+            numbers: a.numbers,
+            reasoning: a.reasoning,
+          }),
+        ),
       };
 
       const sent = await this.withRetry('Lotto recommendation send', () =>
         this.telegramService.sendRecommendation(message),
       );
       if (sent) {
-        this.logger.log(`✅ Weekly recommendation sent for draw #${targetDrawId}`);
+        this.logger.log(
+          `✅ Weekly recommendation sent for draw #${targetDrawId}`,
+        );
       }
     } catch (error) {
-      this.logger.error('❌ Failed to generate weekly lotto recommendation:', error);
+      this.logger.error(
+        '❌ Failed to generate weekly lotto recommendation:',
+        error,
+      );
       await this.notifyError('weekly-lotto-recommendation', error);
     }
   }
@@ -115,7 +125,8 @@ export class SchedulerService {
       const targetDrawId = latest ? latest.id + 1 : 1;
 
       // 이미 수동으로 넣어둔 데이터가 있으면 스킵
-      const existing = await this.pensionRecommendationRepository.findByDrawId(targetDrawId);
+      const existing =
+        await this.pensionRecommendationRepository.findByDrawId(targetDrawId);
       if (existing.length > 0) {
         this.logger.log(
           `⏭️ Pension draw #${targetDrawId} already has ${existing.length} recommendations, skipping`,
@@ -143,10 +154,15 @@ export class SchedulerService {
         this.telegramService.sendPensionRecommendation(message),
       );
       if (sent) {
-        this.logger.log(`✅ Pension recommendation sent for draw #${targetDrawId}`);
+        this.logger.log(
+          `✅ Pension recommendation sent for draw #${targetDrawId}`,
+        );
       }
     } catch (error) {
-      this.logger.error('❌ Failed to generate weekly pension recommendation:', error);
+      this.logger.error(
+        '❌ Failed to generate weekly pension recommendation:',
+        error,
+      );
       await this.notifyError('weekly-pension-recommendation', error);
     }
   }
@@ -189,23 +205,25 @@ export class SchedulerService {
         winningNumbers: checkResult.winningNumbers,
         bonusNumber: checkResult.bonusNumber,
         prizeByRank: checkResult.prizeByRank,
-        results: checkResult.results.map((r: {
-          gameNumber: number;
-          type: string;
-          numbers: number[];
-          matchedCount: number;
-          matchedNumbers: number[];
-          hasBonus: boolean;
-          prizeRank: number | null;
-        }) => ({
-          gameNumber: r.gameNumber,
-          type: r.type,
-          numbers: r.numbers,
-          matchedCount: r.matchedCount,
-          matchedNumbers: r.matchedNumbers,
-          hasBonus: r.hasBonus,
-          prizeRank: r.prizeRank,
-        })),
+        results: checkResult.results.map(
+          (r: {
+            gameNumber: number;
+            type: string;
+            numbers: number[];
+            matchedCount: number;
+            matchedNumbers: number[];
+            hasBonus: boolean;
+            prizeRank: number | null;
+          }) => ({
+            gameNumber: r.gameNumber,
+            type: r.type,
+            numbers: r.numbers,
+            matchedCount: r.matchedCount,
+            matchedNumbers: r.matchedNumbers,
+            hasBonus: r.hasBonus,
+            prizeRank: r.prizeRank,
+          }),
+        ),
       };
 
       const sent = await this.withRetry('Lotto result send', () =>
@@ -252,6 +270,7 @@ export class SchedulerService {
         drawId: checkResult.drawId,
         winningGroupNo: checkResult.winningGroupNo,
         winningDigits: checkResult.winningDigits,
+        winningBonusDigits: checkResult.winningBonusDigits,
         prizeByRank: checkResult.prizeByRank,
         results: checkResult.results.map(
           (r: {
@@ -314,17 +333,19 @@ export class SchedulerService {
     this.logger.log('📊 Updating pension statistics...');
 
     try {
-      const result = await this.commandBus.execute(new SyncPensionDrawsCommand());
+      const result = await this.commandBus.execute(
+        new SyncPensionDrawsCommand(),
+      );
       this.logger.log('✅ Pension statistics updated');
 
       const msg =
         result.syncedCount > 0
           ? `🎱 <b>연금 당첨 데이터 동기화 완료</b>\n\n` +
-          `새로 반영: <b>${result.syncedCount}건</b> (회차 ${result.newDraws?.join(', ') ?? '-'})\n` +
-          `범위: ${result.startDrawId} ~ ${result.endDrawId}회`
+            `새로 반영: <b>${result.syncedCount}건</b> (회차 ${result.newDraws?.join(', ') ?? '-'})\n` +
+            `범위: ${result.startDrawId} ~ ${result.endDrawId}회`
           : `🎱 <b>연금 당첨 데이터 동기화 완료</b>\n\n` +
-          `변경 없음 (최신 상태 유지)\n` +
-          `현재 최신: ${result.endDrawId}회`;
+            `변경 없음 (최신 상태 유지)\n` +
+            `현재 최신: ${result.endDrawId}회`;
       await this.telegramService.sendMessage(msg);
     } catch (error) {
       this.logger.error('❌ Failed to update pension statistics:', error);
@@ -341,7 +362,10 @@ export class SchedulerService {
       try {
         return await fn();
       } catch (error) {
-        this.logger.warn(`${label} attempt ${attempt}/${maxRetries} failed:`, error);
+        this.logger.warn(
+          `${label} attempt ${attempt}/${maxRetries} failed:`,
+          error,
+        );
         if (attempt === maxRetries) throw error;
         await new Promise((r) => setTimeout(r, 3000 * attempt));
       }
@@ -352,7 +376,9 @@ export class SchedulerService {
   private async notifyError(cronName: string, error: unknown): Promise<void> {
     try {
       const msg = error instanceof Error ? error.message : String(error);
-      await this.telegramService.sendMessage(`⚠️ 스케줄러 오류: ${cronName}\n${msg}`);
+      await this.telegramService.sendMessage(
+        `⚠️ 스케줄러 오류: ${cronName}\n${msg}`,
+      );
     } catch {
       // 텔레그램 알림 자체도 실패하면 이미 로그에 남김
     }

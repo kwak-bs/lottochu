@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Post,
-  Get,
-  Query,
-  Logger,
-} from '@nestjs/common';
+import { Controller, Post, Get, Query, Logger } from '@nestjs/common';
 import { CommandBus } from '@nestjs/cqrs';
 import {
   SyncPensionDrawsCommand,
@@ -26,7 +20,7 @@ export class PensionController {
     private readonly commandBus: CommandBus,
     private readonly pensionDrawRepository: PensionDrawRepository,
     private readonly telegramService: TelegramService,
-  ) { }
+  ) {}
 
   /**
    * 연금복권 당첨 데이터 동기화
@@ -84,7 +78,9 @@ export class PensionController {
       targetDrawId = latest ? latest.id + 1 : 1;
     }
 
-    this.logger.log(`Generating pension recommendation for draw #${targetDrawId}`);
+    this.logger.log(
+      `Generating pension recommendation for draw #${targetDrawId}`,
+    );
 
     const command = new GeneratePensionRecommendationCommand(targetDrawId);
     return this.commandBus.execute(command);
@@ -104,7 +100,9 @@ export class PensionController {
         ? latest.id + 1
         : 1;
 
-    this.logger.log(`Generating and sending pension recommendation for draw #${targetDrawId}`);
+    this.logger.log(
+      `Generating and sending pension recommendation for draw #${targetDrawId}`,
+    );
 
     const command = new GeneratePensionRecommendationCommand(targetDrawId);
     const result = await this.commandBus.execute(command);
@@ -124,7 +122,9 @@ export class PensionController {
 
     const sent = await this.telegramService.sendPensionRecommendation(message);
     if (sent) {
-      this.logger.log(`Pension recommendation sent to Telegram for draw #${targetDrawId}`);
+      this.logger.log(
+        `Pension recommendation sent to Telegram for draw #${targetDrawId}`,
+      );
     }
     return { ok: true, targetDrawId, sent: !!sent };
   }
@@ -144,7 +144,12 @@ export class PensionController {
       await this.commandBus.execute(new SyncPensionDrawsCommand());
       const latest = await this.pensionDrawRepository.findLatest();
       if (!latest) {
-        return { ok: true, drawId: null, sent: false, message: 'No pension draws found' };
+        return {
+          ok: true,
+          drawId: null,
+          sent: false,
+          message: 'No pension draws found',
+        };
       }
       const checkResult = await this.commandBus.execute(
         new CheckPensionResultsCommand(latest.id),
@@ -161,6 +166,7 @@ export class PensionController {
         drawId: checkResult.drawId,
         winningGroupNo: checkResult.winningGroupNo,
         winningDigits: checkResult.winningDigits,
+        winningBonusDigits: checkResult.winningBonusDigits,
         prizeByRank: checkResult.prizeByRank,
         results: checkResult.results.map((r) => ({
           gameNumber: r.gameNumber,
@@ -171,7 +177,9 @@ export class PensionController {
         })),
       });
       if (sent) {
-        this.logger.log(`Pension result sent to Telegram for draw #${latest.id}`);
+        this.logger.log(
+          `Pension result sent to Telegram for draw #${latest.id}`,
+        );
       }
       return { ok: true, drawId: latest.id, sent };
     } catch (error) {

@@ -24,4 +24,16 @@ describe('calculatePensionPrizeRank', () => {
   it('returns null for incomplete winning data', () => {
     expect(calculatePensionPrizeRank(1, '123456', null, null)).toBeNull();
   });
+
+  it('returns rank 8 when all six bonus digits match', () => {
+    expect(
+      calculatePensionPrizeRank(1, '123456', 3, winningDigits, '123456'),
+    ).toBe(8);
+  });
+
+  it('prioritizes the bonus prize over a regular suffix match', () => {
+    expect(
+      calculatePensionPrizeRank(1, '123540', 3, winningDigits, '123540'),
+    ).toBe(8);
+  });
 });

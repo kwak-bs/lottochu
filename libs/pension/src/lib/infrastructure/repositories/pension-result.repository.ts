@@ -28,4 +28,11 @@ export class PensionResultRepository {
     });
     return count > 0;
   }
+
+  async updatePrizeRank(
+    recommendationId: string,
+    prizeRank: number | null,
+  ): Promise<void> {
+    await this.repository.update({ recommendationId }, { prizeRank });
+  }
 }
