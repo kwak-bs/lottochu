@@ -22,15 +22,24 @@ describe('TelegramService delivery idempotency', () => {
       markFailed: jest.fn().mockResolvedValue(undefined),
     };
     const sendMessage = jest.fn().mockResolvedValue({ message_id: 1 });
+    const purchaseRepository = {
+      ensurePending: jest.fn().mockResolvedValue({}),
+      setMessageId: jest.fn().mockResolvedValue(undefined),
+      findOne: jest.fn().mockResolvedValue(null),
+      findPending: jest.fn().mockResolvedValue([]),
+      setStatus: jest.fn(),
+      markReminded: jest.fn(),
+    };
     const service = new TelegramService(
       configService as never,
       deliveryRepository as never,
+      purchaseRepository as never,
     );
     (service as unknown as { bot: unknown }).bot = {
       telegram: { sendMessage },
     };
 
-    return { service, deliveryRepository, sendMessage };
+    return { service, deliveryRepository, purchaseRepository, sendMessage };
   }
 
   it('skips a delivery that has already been claimed or sent', async () => {
@@ -48,7 +57,8 @@ describe('TelegramService delivery idempotency', () => {
   });
 
   it('marks a claimed delivery as sent', async () => {
-    const { service, deliveryRepository, sendMessage } = createService(true);
+    const { service, deliveryRepository, purchaseRepository, sendMessage } =
+      createService(true);
 
     await expect(service.sendRecommendation(recommendation)).resolves.toBe(
       true,
@@ -58,6 +68,16 @@ describe('TelegramService delivery idempotency', () => {
     expect(deliveryRepository.markSent).toHaveBeenCalledWith(
       NotificationEventType.LOTTO_RECOMMENDATION,
       300,
+    );
+    expect(purchaseRepository.ensurePending).toHaveBeenCalledWith(
+      'LOTTO',
+      300,
+      '',
+    );
+    expect(purchaseRepository.setMessageId).toHaveBeenCalledWith(
+      'LOTTO',
+      300,
+      1,
     );
   });
 

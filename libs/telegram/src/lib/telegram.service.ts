@@ -1,8 +1,18 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Telegraf } from 'telegraf';
 import { NotificationEventType } from './notification-delivery.entity';
 import { NotificationDeliveryRepository } from './notification-delivery.repository';
+import {
+  LotteryType,
+  PurchaseStatus,
+} from './purchase-confirmation.entity';
+import { PurchaseConfirmationRepository } from './purchase-confirmation.repository';
 
 /**
  * 추천 번호 메시지용 데이터
@@ -82,19 +92,34 @@ export interface PensionResultMessage {
 }
 
 @Injectable()
-export class TelegramService implements OnModuleInit {
+export class TelegramService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(TelegramService.name);
   private bot: Telegraf | null = null;
   private readonly chatId: string;
   private readonly isEnabled: boolean;
+  private readonly adminUserId: string;
+  private readonly updatesEnabled: boolean;
+  private readonly lottoPurchaseUrl: string;
+  private readonly pensionPurchaseUrl: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly deliveryRepository: NotificationDeliveryRepository,
+    private readonly purchaseRepository: PurchaseConfirmationRepository,
   ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     this.chatId = this.configService.get<string>('TELEGRAM_CHAT_ID') || '';
     this.isEnabled = !!token && !!this.chatId;
+    this.adminUserId =
+      this.configService.get<string>('TELEGRAM_ADMIN_USER_ID') || '';
+    this.updatesEnabled =
+      this.configService.get<string>('TELEGRAM_UPDATES_ENABLED') !== 'false';
+    this.lottoPurchaseUrl =
+      this.configService.get<string>('LOTTO_PURCHASE_URL') ||
+      'https://ol.dhlottery.co.kr/olotto/game/game645.do';
+    this.pensionPurchaseUrl =
+      this.configService.get<string>('PENSION_PURCHASE_URL') ||
+      'https://el.dhlottery.co.kr/game_mobile/pension720/game.jsp';
 
     if (token) {
       this.bot = new Telegraf(token);
@@ -104,11 +129,21 @@ export class TelegramService implements OnModuleInit {
   onModuleInit(): void {
     if (this.isEnabled) {
       this.logger.log('Telegram bot initialized');
+      this.registerPurchaseCallbacks();
+      if (this.updatesEnabled && this.bot) {
+        void this.bot.launch().catch((error) => {
+          this.logger.error('Failed to start Telegram update polling', error);
+        });
+      }
     } else {
       this.logger.warn(
         'Telegram bot is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env',
       );
     }
+  }
+
+  onModuleDestroy(): void {
+    this.bot?.stop('application shutdown');
   }
 
   /**
@@ -153,10 +188,20 @@ export class TelegramService implements OnModuleInit {
    */
   async sendRecommendation(data: RecommendationMessage): Promise<boolean> {
     const message = this.formatRecommendationMessage(data);
+    const summary = data.statistical
+      .map((item) => item.numbers.join(' '))
+      .concat(data.ai.map((item) => item.numbers.join(' ')))
+      .join('\n');
+    await this.purchaseRepository.ensurePending(
+      LotteryType.LOTTO,
+      data.targetDrawId,
+      summary,
+    );
     return this.sendTrackedMessage(
       NotificationEventType.LOTTO_RECOMMENDATION,
       data.targetDrawId,
       message,
+      LotteryType.LOTTO,
     );
   }
 
@@ -164,7 +209,11 @@ export class TelegramService implements OnModuleInit {
    * 결과 메시지 전송
    */
   async sendResult(data: ResultMessage): Promise<boolean> {
-    const message = this.formatResultMessage(data);
+    const purchase = await this.purchaseRepository.findOne(
+      LotteryType.LOTTO,
+      data.drawId,
+    );
+    const message = this.formatResultMessage(data, purchase?.status);
     return this.sendTrackedMessage(
       NotificationEventType.LOTTO_RESULT,
       data.drawId,
@@ -179,10 +228,20 @@ export class TelegramService implements OnModuleInit {
     data: PensionRecommendationMessage,
   ): Promise<boolean> {
     const message = this.formatPensionRecommendationMessage(data);
+    const summary = data.statistical
+      .map((item) => `${item.groupNo}조 ${item.digits}`)
+      .concat(data.ai.map((item) => `${item.groupNo}조 ${item.digits}`))
+      .join('\n');
+    await this.purchaseRepository.ensurePending(
+      LotteryType.PENSION,
+      data.targetDrawId,
+      summary,
+    );
     return this.sendTrackedMessage(
       NotificationEventType.PENSION_RECOMMENDATION,
       data.targetDrawId,
       message,
+      LotteryType.PENSION,
     );
   }
 
@@ -190,7 +249,11 @@ export class TelegramService implements OnModuleInit {
    * 연금복권 결과 메시지 전송
    */
   async sendPensionResult(data: PensionResultMessage): Promise<boolean> {
-    const message = this.formatPensionResultMessage(data);
+    const purchase = await this.purchaseRepository.findOne(
+      LotteryType.PENSION,
+      data.drawId,
+    );
+    const message = this.formatPensionResultMessage(data, purchase?.status);
     return this.sendTrackedMessage(
       NotificationEventType.PENSION_RESULT,
       data.drawId,
@@ -202,6 +265,7 @@ export class TelegramService implements OnModuleInit {
     eventType: NotificationEventType,
     drawId: number,
     message: string,
+    purchaseType?: LotteryType,
   ): Promise<boolean> {
     if (!this.isEnabled || !this.bot) {
       this.logger.warn('Telegram is not configured, message not sent');
@@ -217,9 +281,18 @@ export class TelegramService implements OnModuleInit {
     }
 
     try {
-      const sent = await this.sendMessage(message);
-      if (sent) {
+      const sent = purchaseType
+        ? await this.sendPurchaseMessage(purchaseType, drawId, message)
+        : { ok: await this.sendMessage(message), messageId: null };
+      if (sent.ok) {
         await this.deliveryRepository.markSent(eventType, drawId);
+        if (purchaseType && sent.messageId != null) {
+          await this.purchaseRepository.setMessageId(
+            purchaseType,
+            drawId,
+            sent.messageId,
+          );
+        }
         return true;
       }
 
@@ -233,6 +306,112 @@ export class TelegramService implements OnModuleInit {
       await this.deliveryRepository.markFailed(eventType, drawId, error);
       throw error;
     }
+  }
+
+  async sendPendingPurchaseReminders(lotteryType: LotteryType): Promise<number> {
+    if (
+      this.configService.get<string>('PURCHASE_REMINDER_ENABLED') === 'false'
+    ) {
+      return 0;
+    }
+    const maxReminders = Number(
+      this.configService.get<string>('PURCHASE_MAX_REMINDERS') || '1',
+    );
+    const pending = await this.purchaseRepository.findPending(lotteryType);
+    let sentCount = 0;
+
+    for (const purchase of pending) {
+      if (purchase.reminderCount >= maxReminders) continue;
+      const label = lotteryType === LotteryType.LOTTO ? '로또' : '연금복권';
+      const message = [
+        `⏰ <b>${label} ${purchase.drawId}회 구매 확인이 없습니다.</b>`,
+        '',
+        `<code>${this.escapeHtml(purchase.recommendationSummary)}</code>`,
+        '',
+        '구매했다면 아래 버튼으로 기록해 주세요.',
+      ].join('\n');
+      const sent = await this.sendPurchaseMessage(
+        lotteryType,
+        purchase.drawId,
+        message,
+      );
+      if (sent.ok) {
+        await this.purchaseRepository.markReminded(purchase.id);
+        sentCount++;
+      }
+    }
+    return sentCount;
+  }
+
+  private async sendPurchaseMessage(
+    lotteryType: LotteryType,
+    drawId: number,
+    message: string,
+  ): Promise<{ ok: boolean; messageId: number | null }> {
+    if (!this.isEnabled || !this.bot) return { ok: false, messageId: null };
+    const code = lotteryType === LotteryType.LOTTO ? 'l' : 'p';
+    const purchaseUrl =
+      lotteryType === LotteryType.LOTTO
+        ? this.lottoPurchaseUrl
+        : this.pensionPurchaseUrl;
+    try {
+      const sent = await this.bot.telegram.sendMessage(this.chatId, message, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '공식 구매 페이지', url: purchaseUrl }],
+            [
+              { text: '✅ 구매 완료', callback_data: `pc:${code}:${drawId}:c` },
+              { text: '⏭ 건너뛰기', callback_data: `pc:${code}:${drawId}:s` },
+            ],
+          ],
+        },
+      });
+      return { ok: true, messageId: sent.message_id };
+    } catch (error) {
+      this.logger.error('Failed to send purchase assistant message', error);
+      return { ok: false, messageId: null };
+    }
+  }
+
+  private registerPurchaseCallbacks(): void {
+    if (!this.bot) return;
+    this.bot.action(/^pc:(l|p):(\d+):(c|s)$/, async (context) => {
+      const chatId = context.chat?.id == null ? '' : String(context.chat.id);
+      const userId = context.from?.id == null ? '' : String(context.from.id);
+      if (
+        chatId !== this.chatId ||
+        (this.adminUserId && userId !== this.adminUserId)
+      ) {
+        await context.answerCbQuery('허용되지 않은 사용자입니다.');
+        return;
+      }
+
+      const match = context.match;
+      const lotteryType =
+        match[1] === 'l' ? LotteryType.LOTTO : LotteryType.PENSION;
+      const drawId = Number(match[2]);
+      const status =
+        match[3] === 'c' ? PurchaseStatus.CONFIRMED : PurchaseStatus.SKIPPED;
+      const updated = await this.purchaseRepository.setStatus(
+        lotteryType,
+        drawId,
+        status,
+      );
+      if (!updated) {
+        await context.answerCbQuery('구매 기록을 찾지 못했습니다.');
+        return;
+      }
+
+      const text =
+        status === PurchaseStatus.CONFIRMED
+          ? '✅ 구매 완료로 기록했습니다.'
+          : '⏭ 이번 회차를 건너뜁니다.';
+      await context.answerCbQuery(text);
+      await context.editMessageReplyMarkup({
+        inline_keyboard: [],
+      });
+    });
   }
 
   private escapeHtml(text: string): string {
@@ -276,7 +455,10 @@ export class TelegramService implements OnModuleInit {
   /**
    * 결과 메시지 포맷팅
    */
-  private formatResultMessage(data: ResultMessage): string {
+  private formatResultMessage(
+    data: ResultMessage,
+    purchaseStatus?: PurchaseStatus,
+  ): string {
     const winningResults = data.results.filter((r) => r.prizeRank != null);
     const bestRank = winningResults.reduce<number | null>(
       (best, result) =>
@@ -291,6 +473,8 @@ export class TelegramService implements OnModuleInit {
           : `🎯 <b>${data.drawId}회 로또 결과</b>`;
     const lines: string[] = [
       title,
+      '',
+      this.getPurchaseStatusText(purchaseStatus),
       '',
       `당첨번호: <b>${data.winningNumbers.join(', ')}</b> + 🔴 ${data.bonusNumber}`,
       '',
@@ -458,7 +642,10 @@ export class TelegramService implements OnModuleInit {
   /**
    * 연금복권 결과 메시지 포맷팅
    */
-  private formatPensionResultMessage(data: PensionResultMessage): string {
+  private formatPensionResultMessage(
+    data: PensionResultMessage,
+    purchaseStatus?: PurchaseStatus,
+  ): string {
     const winningStr =
       data.winningGroupNo != null && data.winningDigits != null
         ? `${data.winningGroupNo}조 ${data.winningDigits}`
@@ -481,6 +668,8 @@ export class TelegramService implements OnModuleInit {
 
     const lines: string[] = [
       title,
+      '',
+      this.getPurchaseStatusText(purchaseStatus),
       '',
       `당첨번호: <b>${winningStr}</b>`,
       `보너스번호: <b>${data.winningBonusDigits ?? '(미등록)'}</b>`,
@@ -540,5 +729,15 @@ export class TelegramService implements OnModuleInit {
     if (rank === 1) return '월 700만원 × 20년';
     if (rank === 2 || rank === 8) return '월 100만원 × 10년';
     return null;
+  }
+
+  private getPurchaseStatusText(status?: PurchaseStatus): string {
+    if (status === PurchaseStatus.CONFIRMED) {
+      return '✅ 사용자 구매 완료 기록이 있는 회차입니다.';
+    }
+    if (status === PurchaseStatus.SKIPPED) {
+      return 'ℹ️ 구매하지 않음으로 기록한 회차입니다.';
+    }
+    return '⚠️ 구매 완료 기록이 없는 추천번호 비교 결과입니다.';
   }
 }

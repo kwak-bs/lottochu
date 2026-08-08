@@ -7,6 +7,7 @@ import { PensionDraw } from './libs/pension/src/lib/domain/entities/pension-draw
 import { PensionRecommendation } from './libs/pension/src/lib/domain/entities/pension-recommendation.entity';
 import { PensionResult } from './libs/pension/src/lib/domain/entities/pension-result.entity';
 import { NotificationDelivery } from './libs/telegram/src/lib/notification-delivery.entity';
+import { PurchaseConfirmation } from './libs/telegram/src/lib/purchase-confirmation.entity';
 
 export default new DataSource({
   type: 'postgres',
@@ -23,6 +24,7 @@ export default new DataSource({
     PensionRecommendation,
     PensionResult,
     NotificationDelivery,
+    PurchaseConfirmation,
   ],
   migrations: ['migrations/*{.ts,.js}'],
   synchronize: false,
