@@ -1,7 +1,7 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { GeneratePensionRecommendationCommand } from './generate-pension-recommendation.command';
 import {
   PensionRecommendation,
@@ -52,6 +52,12 @@ export class GeneratePensionRecommendationHandler
       `Generating pension recommendations for draw #${targetDrawId}`,
     );
 
+    const existing =
+      await this.pensionRecommendationRepository.findByDrawId(targetDrawId);
+    if (existing.length > 0) {
+      return this.toExistingResult(targetDrawId, existing);
+    }
+
     const statisticalResults: {
       gameNumber: number;
       groupNo: number;
@@ -79,8 +85,17 @@ export class GeneratePensionRecommendationHandler
       statisticalResults.push({ gameNumber, groupNo, digits });
     }
 
-    const recommendations =
-      await this.pensionRecommendationRepository.saveMany(toSave);
+    let recommendations: PensionRecommendation[];
+    try {
+      recommendations =
+        await this.pensionRecommendationRepository.saveMany(toSave);
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) throw error;
+
+      const concurrentlyCreated =
+        await this.pensionRecommendationRepository.findByDrawId(targetDrawId);
+      return this.toExistingResult(targetDrawId, concurrentlyCreated);
+    }
 
     return {
       targetDrawId,
@@ -88,5 +103,34 @@ export class GeneratePensionRecommendationHandler
       statistical: statisticalResults,
       ai: [], // 통계만 사용, AI 추천 없음
     };
+  }
+
+  private toExistingResult(
+    targetDrawId: number,
+    recommendations: PensionRecommendation[],
+  ): GeneratePensionRecommendationResult {
+    if (recommendations.length !== 5) {
+      throw new Error(
+        `Pension draw #${targetDrawId} has an incomplete recommendation set (${recommendations.length}/5)`,
+      );
+    }
+
+    return {
+      targetDrawId,
+      recommendations,
+      statistical: recommendations.map((recommendation) => ({
+        gameNumber: recommendation.gameNumber,
+        groupNo: recommendation.groupNo,
+        digits: recommendation.digits,
+      })),
+      ai: [],
+    };
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      error instanceof QueryFailedError &&
+      (error.driverError as { code?: string }).code === '23505'
+    );
   }
 }

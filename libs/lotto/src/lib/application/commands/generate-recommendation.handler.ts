@@ -1,12 +1,15 @@
 import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { QueryFailedError, Repository } from 'typeorm';
 import { GenerateRecommendationCommand } from './generate-recommendation.command';
 import { Recommendation, RecommendationType } from '../../domain/entities';
 import { StatisticsService } from '@lottochu/statistics';
 import { AiService } from '@lottochu/ai';
-import { DrawRepository } from '../../infrastructure/repositories';
+import {
+  DrawRepository,
+  RecommendationRepository,
+} from '../../infrastructure/repositories';
 
 /**
  * 추천 결과
@@ -27,6 +30,7 @@ export class GenerateRecommendationHandler
   constructor(
     @InjectRepository(Recommendation)
     private readonly recommendationRepository: Repository<Recommendation>,
+    private readonly storedRecommendationRepository: RecommendationRepository,
     private readonly statisticsService: StatisticsService,
     private readonly aiService: AiService,
     private readonly drawRepository: DrawRepository,
@@ -37,6 +41,12 @@ export class GenerateRecommendationHandler
   ): Promise<GenerateRecommendationResult> {
     const { targetDrawId } = command;
     this.logger.log(`Generating recommendations for draw #${targetDrawId}`);
+
+    const existing =
+      await this.storedRecommendationRepository.findByDrawId(targetDrawId);
+    if (existing.length > 0) {
+      return this.toExistingResult(targetDrawId, existing);
+    }
 
     const statisticalResults: { numbers: number[] }[] = [];
     const aiResults: { numbers: number[]; reasoning: string }[] = [];
@@ -60,7 +70,10 @@ export class GenerateRecommendationHandler
         );
       }
     } catch (error) {
-      this.logger.warn('AI recommendation failed, using fallback random numbers:', error);
+      this.logger.warn(
+        'AI recommendation failed, using fallback random numbers:',
+        error,
+      );
       for (let i = 0; i < 2; i++) {
         const numbers = this.pickRandomNumbers(
           Array.from({ length: 45 }, (_, j) => j + 1),
@@ -94,7 +107,16 @@ export class GenerateRecommendationHandler
         }),
       );
     }
-    const recommendations = await this.recommendationRepository.save(toSave);
+    let recommendations: Recommendation[];
+    try {
+      recommendations = await this.recommendationRepository.save(toSave);
+    } catch (error) {
+      if (!this.isUniqueViolation(error)) throw error;
+
+      const concurrentlyCreated =
+        await this.storedRecommendationRepository.findByDrawId(targetDrawId);
+      return this.toExistingResult(targetDrawId, concurrentlyCreated);
+    }
 
     this.logger.log(
       `Generated ${recommendations.length} recommendations for draw #${targetDrawId}`,
@@ -149,5 +171,42 @@ export class GenerateRecommendationHandler
   private pickRandomNumbers(candidates: number[], count: number): number[] {
     const shuffled = [...candidates].sort(() => Math.random() - 0.5);
     return shuffled.slice(0, count).sort((a, b) => a - b);
+  }
+
+  private toExistingResult(
+    targetDrawId: number,
+    recommendations: Recommendation[],
+  ): GenerateRecommendationResult {
+    if (recommendations.length !== 5) {
+      throw new Error(
+        `Draw #${targetDrawId} has an incomplete recommendation set (${recommendations.length}/5)`,
+      );
+    }
+
+    return {
+      targetDrawId,
+      recommendations,
+      statistical: recommendations
+        .filter(
+          (recommendation) =>
+            recommendation.type === RecommendationType.STATISTICAL,
+        )
+        .map((recommendation) => ({ numbers: recommendation.numbers })),
+      ai: recommendations
+        .filter(
+          (recommendation) => recommendation.type === RecommendationType.AI,
+        )
+        .map((recommendation) => ({
+          numbers: recommendation.numbers,
+          reasoning: recommendation.aiReasoning ?? 'AI 추천',
+        })),
+    };
+  }
+
+  private isUniqueViolation(error: unknown): boolean {
+    return (
+      error instanceof QueryFailedError &&
+      (error.driverError as { code?: string }).code === '23505'
+    );
   }
 }
