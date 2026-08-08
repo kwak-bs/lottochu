@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "outDir": "./dist/tools",
+    "types": ["node"]
+  },
+  "include": ["typeorm.config.ts", "migrations/**/*.ts"]
+}

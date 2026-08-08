@@ -8,6 +8,9 @@
     },
     {
       "path": "./apps/api/tsconfig.spec.json"
+    },
+    {
+      "path": "./tsconfig.tools.json"
     }
   ]
 }

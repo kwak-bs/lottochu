@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
   OneToOne,
 } from 'typeorm';
 import { PensionResult } from './pension-result.entity';
@@ -20,6 +21,9 @@ export enum PensionRecommendationType {
  * 조(1~5) + 6자리 번호
  */
 @Entity('pension_recommendations')
+@Index('UQ_pension_recommendation_draw_game', ['targetDrawId', 'gameNumber'], {
+  unique: true,
+})
 export class PensionRecommendation {
   @PrimaryGeneratedColumn('uuid')
   id: string;

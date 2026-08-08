@@ -18,6 +18,9 @@
     "test:all": "nx run-many -t test",
     "test:watch": "nx test api --watch",
     "test:cov": "nx test api --coverage",
+    "migration:run": "typeorm-ts-node-commonjs -d typeorm.config.ts migration:run",
+    "migration:revert": "typeorm-ts-node-commonjs -d typeorm.config.ts migration:revert",
+    "migration:show": "typeorm-ts-node-commonjs -d typeorm.config.ts migration:show",
     "graph": "nx graph"
   },
   "dependencies": {

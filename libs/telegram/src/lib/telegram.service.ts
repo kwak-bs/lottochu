@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Telegraf } from 'telegraf';
+import { NotificationEventType } from './notification-delivery.entity';
+import { NotificationDeliveryRepository } from './notification-delivery.repository';
 
 /**
  * 추천 번호 메시지용 데이터
@@ -85,7 +87,10 @@ export class TelegramService implements OnModuleInit {
   private readonly chatId: string;
   private readonly isEnabled: boolean;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly deliveryRepository: NotificationDeliveryRepository,
+  ) {
     const token = this.configService.get<string>('TELEGRAM_BOT_TOKEN');
     this.chatId = this.configService.get<string>('TELEGRAM_CHAT_ID') || '';
     this.isEnabled = !!token && !!this.chatId;
@@ -95,7 +100,7 @@ export class TelegramService implements OnModuleInit {
     }
   }
 
-  async onModuleInit() {
+  onModuleInit(): void {
     if (this.isEnabled) {
       this.logger.log('Telegram bot initialized');
     } else {
@@ -130,7 +135,10 @@ export class TelegramService implements OnModuleInit {
         this.logger.log('Message sent to Telegram');
         return true;
       } catch (error) {
-        this.logger.error(`Failed to send Telegram message (attempt ${attempt}/${maxRetries}):`, error);
+        this.logger.error(
+          `Failed to send Telegram message (attempt ${attempt}/${maxRetries}):`,
+          error,
+        );
         if (attempt < maxRetries) {
           await new Promise((r) => setTimeout(r, 1000 * attempt));
         }
@@ -144,7 +152,11 @@ export class TelegramService implements OnModuleInit {
    */
   async sendRecommendation(data: RecommendationMessage): Promise<boolean> {
     const message = this.formatRecommendationMessage(data);
-    return this.sendMessage(message);
+    return this.sendTrackedMessage(
+      NotificationEventType.LOTTO_RECOMMENDATION,
+      data.targetDrawId,
+      message,
+    );
   }
 
   /**
@@ -152,7 +164,11 @@ export class TelegramService implements OnModuleInit {
    */
   async sendResult(data: ResultMessage): Promise<boolean> {
     const message = this.formatResultMessage(data);
-    return this.sendMessage(message);
+    return this.sendTrackedMessage(
+      NotificationEventType.LOTTO_RESULT,
+      data.drawId,
+      message,
+    );
   }
 
   /**
@@ -162,7 +178,11 @@ export class TelegramService implements OnModuleInit {
     data: PensionRecommendationMessage,
   ): Promise<boolean> {
     const message = this.formatPensionRecommendationMessage(data);
-    return this.sendMessage(message);
+    return this.sendTrackedMessage(
+      NotificationEventType.PENSION_RECOMMENDATION,
+      data.targetDrawId,
+      message,
+    );
   }
 
   /**
@@ -170,7 +190,48 @@ export class TelegramService implements OnModuleInit {
    */
   async sendPensionResult(data: PensionResultMessage): Promise<boolean> {
     const message = this.formatPensionResultMessage(data);
-    return this.sendMessage(message);
+    return this.sendTrackedMessage(
+      NotificationEventType.PENSION_RESULT,
+      data.drawId,
+      message,
+    );
+  }
+
+  private async sendTrackedMessage(
+    eventType: NotificationEventType,
+    drawId: number,
+    message: string,
+  ): Promise<boolean> {
+    if (!this.isEnabled || !this.bot) {
+      this.logger.warn('Telegram is not configured, message not sent');
+      return false;
+    }
+
+    const claimed = await this.deliveryRepository.claim(eventType, drawId);
+    if (!claimed) {
+      this.logger.log(
+        `Skipping duplicate Telegram delivery: ${eventType} draw #${drawId}`,
+      );
+      return true;
+    }
+
+    try {
+      const sent = await this.sendMessage(message);
+      if (sent) {
+        await this.deliveryRepository.markSent(eventType, drawId);
+        return true;
+      }
+
+      await this.deliveryRepository.markFailed(
+        eventType,
+        drawId,
+        new Error('Telegram delivery failed after retries'),
+      );
+      return false;
+    } catch (error) {
+      await this.deliveryRepository.markFailed(eventType, drawId, error);
+      throw error;
+    }
   }
 
   private escapeHtml(text: string): string {
@@ -262,7 +323,9 @@ export class TelegramService implements OnModuleInit {
     }, data.results[0]);
 
     if (bestResult && bestResult.prizeRank) {
-      lines.push(`🏆 이번 주 최고: ${bestResult.prizeRank}등 (${bestResult.gameNumber}번 게임)`);
+      lines.push(
+        `🏆 이번 주 최고: ${bestResult.prizeRank}등 (${bestResult.gameNumber}번 게임)`,
+      );
     } else {
       lines.push(`🏆 이번 주 최고: ${bestResult?.matchedCount || 0}개 일치`);
     }
@@ -275,7 +338,10 @@ export class TelegramService implements OnModuleInit {
     return emojis[gameNumber - 1] || `${gameNumber}.`;
   }
 
-  private getMatchEmoji(matchedCount: number, prizeRank: number | null): string {
+  private getMatchEmoji(
+    matchedCount: number,
+    prizeRank: number | null,
+  ): string {
     if (prizeRank === 1) return '🎉🎉🎉';
     if (prizeRank === 2) return '🎉🎉';
     if (prizeRank === 3) return '🎉';
@@ -301,7 +367,8 @@ export class TelegramService implements OnModuleInit {
     prizeByRank: PensionResultMessage['prizeByRank'],
   ): string {
     if (prizeRank == null) return '낙첨';
-    const prize = prizeByRank[prizeRank as keyof PensionResultMessage['prizeByRank']];
+    const prize =
+      prizeByRank[prizeRank as keyof PensionResultMessage['prizeByRank']];
     const moneyText = this.formatMoney(prize);
     if (!moneyText) return `${prizeRank}등`;
     return `${prizeRank}등 · ${moneyText}`;
@@ -375,7 +442,10 @@ export class TelegramService implements OnModuleInit {
       lines.push('📊 <b>통계 기반:</b>');
       for (const r of statResults) {
         const emoji = this.getGameEmoji(r.gameNumber);
-        const prizeText = this.getPensionPrizeText(r.prizeRank, data.prizeByRank);
+        const prizeText = this.getPensionPrizeText(
+          r.prizeRank,
+          data.prizeByRank,
+        );
         lines.push(`${emoji} ${r.groupNo}조 ${r.digits} → ${prizeText}`);
       }
     }
@@ -387,7 +457,10 @@ export class TelegramService implements OnModuleInit {
       lines.push('🤖 <b>AI 추천:</b>');
       for (const r of aiResults) {
         const emoji = this.getGameEmoji(r.gameNumber);
-        const prizeText = this.getPensionPrizeText(r.prizeRank, data.prizeByRank);
+        const prizeText = this.getPensionPrizeText(
+          r.prizeRank,
+          data.prizeByRank,
+        );
         lines.push(`${emoji} ${r.groupNo}조 ${r.digits} → ${prizeText}`);
       }
     }
@@ -397,7 +470,7 @@ export class TelegramService implements OnModuleInit {
     const bestResult = data.results.reduce(
       (best, curr) =>
         curr.prizeRank != null &&
-          (best == null || curr.prizeRank! < best.prizeRank!)
+        (best == null || curr.prizeRank < best.prizeRank!)
           ? curr
           : best,
       data.results[0] as (typeof data.results)[0] | undefined,
