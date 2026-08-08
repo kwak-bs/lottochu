@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
   OneToOne,
 } from 'typeorm';
 import { Result } from './result.entity';
@@ -21,6 +22,9 @@ export enum RecommendationType {
  * 로또 번호 추천 엔티티
  */
 @Entity('lotto_recommendations')
+@Index('UQ_lotto_recommendation_draw_game', ['targetDrawId', 'gameNumber'], {
+  unique: true,
+})
 export class Recommendation {
   /** 고유 ID (UUID) */
   @PrimaryGeneratedColumn('uuid')
