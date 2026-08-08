@@ -1,9 +1,4 @@
-import {
-  Entity,
-  PrimaryColumn,
-  Column,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn } from 'typeorm';
 
 /**
  * 연금복권720+ 추첨 결과 엔티티
@@ -26,6 +21,10 @@ export class PensionDraw {
   /** 1등 6자리 번호 (예: 112703), API 미제공 시 nullable */
   @Column({ type: 'varchar', length: 6, nullable: true })
   digits: string | null;
+
+  /** 보너스 당첨 6자리 번호 */
+  @Column({ type: 'varchar', length: 6, name: 'bonus_digits', nullable: true })
+  bonusDigits: string | null;
 
   /** 1~8등 당첨금 (API wnRnk 1~8) */
   @Column({ type: 'bigint', name: 'prize_1st', nullable: true })

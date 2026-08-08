@@ -21,6 +21,7 @@ export interface CheckPensionResultsResult {
   drawId: number;
   winningGroupNo: number | null;
   winningDigits: string | null;
+  winningBonusDigits: string | null;
   prizeByRank: {
     1: string | null;
     2: string | null;
@@ -74,20 +75,21 @@ export class CheckPensionResultsHandler
     for (const rec of recommendations) {
       const existing =
         await this.pensionResultRepository.findByRecommendationId(rec.id);
-      const prizeRank =
-        existing?.prizeRank ??
-        calculatePensionPrizeRank(
-          rec.groupNo,
-          rec.digits,
-          draw.groupNo,
-          draw.digits,
-        );
+      const prizeRank = calculatePensionPrizeRank(
+        rec.groupNo,
+        rec.digits,
+        draw.groupNo,
+        draw.digits,
+        draw.bonusDigits,
+      );
 
       if (!existing) {
         await this.pensionResultRepository.save({
           recommendationId: rec.id,
           prizeRank,
         });
+      } else if (existing.prizeRank !== prizeRank) {
+        await this.pensionResultRepository.updatePrizeRank(rec.id, prizeRank);
       }
 
       results.push({
@@ -108,6 +110,7 @@ export class CheckPensionResultsHandler
       drawId: command.drawId,
       winningGroupNo: draw.groupNo,
       winningDigits: draw.digits,
+      winningBonusDigits: draw.bonusDigits,
       prizeByRank: {
         1: draw.prize1st,
         2: draw.prize2nd,

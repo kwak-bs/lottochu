@@ -56,6 +56,7 @@ export interface PensionDrawInfo {
   drawDate: Date | null;
   groupNo: number | null;
   digits: string | null;
+  bonusDigits: string | null;
   prizes: (number | null)[]; // index 0 = 1등, .. 7 = 8등
   winners: (number | null)[]; // index 0 = 1등, .. (WnInfo API에서만 채움)
 }
@@ -219,6 +220,7 @@ export class DhPensionClient {
 
       let groupNo: number | null = null;
       let digits: string | null = null;
+      let bonusDigits: string | null = null;
       const prizes: (number | null)[] = Array.from({ length: 8 }, () => null);
       const winners: (number | null)[] = Array.from({ length: 8 }, () => null);
 
@@ -230,6 +232,12 @@ export class DhPensionClient {
           }
           if (row.wnRnkVl != null && row.wnRnkVl.length >= 6) {
             digits = row.wnRnkVl.slice(-6);
+          }
+        }
+
+        if (row.psltSn === 8 && row.wnSqNo === 21) {
+          if (row.wnRnkVl != null && row.wnRnkVl.length >= 6) {
+            bonusDigits = row.wnRnkVl.slice(-6);
           }
         }
 
@@ -251,6 +259,7 @@ export class DhPensionClient {
         drawDate,
         groupNo,
         digits,
+        bonusDigits,
         prizes,
         winners,
       });

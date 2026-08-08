@@ -2,10 +2,7 @@ import { CommandHandler, ICommandHandler } from '@nestjs/cqrs';
 import { Logger } from '@nestjs/common';
 import { SyncPensionDrawsCommand } from './sync-pension-draws.command';
 import { PensionDrawRepository } from '../../infrastructure/repositories';
-import {
-  DhPensionClient,
-  PensionDrawInfo,
-} from '@lottochu/shared';
+import { DhPensionClient, PensionDrawInfo } from '@lottochu/shared';
 import { PensionDraw } from '../../domain/entities';
 
 export interface SyncPensionDrawsResult {
@@ -44,14 +41,19 @@ export class SyncPensionDrawsHandler
 
     this.logger.log(`Syncing pension draws from #${startId} to #${endId}`);
 
-    const drawsFromApi = await this.dhPensionClient.getDrawRange(startId, endId);
+    const drawsFromApi = await this.dhPensionClient.getDrawRange(
+      startId,
+      endId,
+    );
     const draws = drawsFromApi.map((info) => this.mapToDraw(info));
     const upserted = await this.pensionDrawRepository.upsertMany(draws);
     const newDraws = upserted.map((d) => d.id);
     const syncedCount = newDraws.length;
 
     if (syncedCount > 0) {
-      this.logger.log(`Pension sync complete. Synced ${syncedCount} new draws: ${newDraws.join(', ')}`);
+      this.logger.log(
+        `Pension sync complete. Synced ${syncedCount} new draws: ${newDraws.join(', ')}`,
+      );
     } else {
       this.logger.log('Pension sync complete. No new draws.');
     }
@@ -70,6 +72,7 @@ export class SyncPensionDrawsHandler
       drawDate: info.drawDate,
       groupNo: info.groupNo,
       digits: info.digits,
+      bonusDigits: info.bonusDigits,
       prize1st: info.prizes[0]?.toString() ?? null,
       prize2nd: info.prizes[1]?.toString() ?? null,
       prize3rd: info.prizes[2]?.toString() ?? null,
