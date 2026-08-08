@@ -61,6 +61,7 @@ export interface PensionResultMessage {
   drawId: number;
   winningGroupNo: number | null;
   winningDigits: string | null;
+  winningBonusDigits: string | null;
   prizeByRank: {
     1: string | null;
     2: string | null;
@@ -276,8 +277,20 @@ export class TelegramService implements OnModuleInit {
    * 결과 메시지 포맷팅
    */
   private formatResultMessage(data: ResultMessage): string {
+    const winningResults = data.results.filter((r) => r.prizeRank != null);
+    const bestRank = winningResults.reduce<number | null>(
+      (best, result) =>
+        best == null || result.prizeRank! < best ? result.prizeRank : best,
+      null,
+    );
+    const title =
+      bestRank != null && bestRank <= 3
+        ? `🚨🎉 <b>${data.drawId}회 로또 고액 당첨!</b>`
+        : bestRank != null
+          ? `🎉 <b>${data.drawId}회 로또 당첨을 축하합니다!</b>`
+          : `🎯 <b>${data.drawId}회 로또 결과</b>`;
     const lines: string[] = [
-      `🎯 <b>${data.drawId}회 당첨 결과</b>`,
+      title,
       '',
       `당첨번호: <b>${data.winningNumbers.join(', ')}</b> + 🔴 ${data.bonusNumber}`,
       '',
@@ -316,18 +329,36 @@ export class TelegramService implements OnModuleInit {
 
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    // 최고 성적
-    const bestResult = data.results.reduce((best, curr) => {
-      if (!best || curr.matchedCount > best.matchedCount) return curr;
-      return best;
-    }, data.results[0]);
+    const bestResult = winningResults.sort(
+      (a, b) => a.prizeRank! - b.prizeRank!,
+    )[0];
+    const totalPrize = winningResults.reduce((sum, result) => {
+      const value =
+        data.prizeByRank[
+          result.prizeRank! as keyof ResultMessage['prizeByRank']
+        ];
+      const amount = Number(value);
+      return Number.isFinite(amount) ? sum + amount : sum;
+    }, 0);
 
-    if (bestResult && bestResult.prizeRank) {
+    if (bestResult) {
+      lines.push(`🎊 당첨 ${winningResults.length}/${data.results.length}게임`);
       lines.push(
-        `🏆 이번 주 최고: ${bestResult.prizeRank}등 (${bestResult.gameNumber}번 게임)`,
+        `🏆 최고 ${bestResult.prizeRank}등 (${bestResult.gameNumber}번 게임)`,
       );
+      if (totalPrize > 0) {
+        lines.push(
+          `💰 예상 총 당첨금: <b>${this.formatAmount(totalPrize)}</b>`,
+        );
+      }
+      lines.push('⚠️ 복권을 안전하게 보관하고 공식 당첨 결과를 확인하세요.');
     } else {
-      lines.push(`🏆 이번 주 최고: ${bestResult?.matchedCount || 0}개 일치`);
+      const matchedCount = data.results.reduce(
+        (best, result) => Math.max(best, result.matchedCount),
+        0,
+      );
+      lines.push(`🍀 이번 회는 아쉽게 낙첨 (최고 ${matchedCount}개 일치)`);
+      lines.push('다음 회차도 무리하지 않는 선에서 행운을 빌어요!');
     }
 
     return lines.join('\n');
@@ -378,6 +409,10 @@ export class TelegramService implements OnModuleInit {
     if (value == null) return null;
     const amount = Number(value);
     if (!Number.isFinite(amount)) return null;
+    return this.formatAmount(amount);
+  }
+
+  private formatAmount(amount: number): string {
     return `${amount.toLocaleString('ko-KR')}원`;
   }
 
@@ -429,10 +464,26 @@ export class TelegramService implements OnModuleInit {
         ? `${data.winningGroupNo}조 ${data.winningDigits}`
         : '(당첨번호 미등록)';
 
+    const winningResults = data.results.filter((r) => r.prizeRank != null);
+    const bestResult = winningResults.sort((a, b) => {
+      const priority = (rank: number) => (rank === 8 ? 2.5 : rank);
+      return priority(a.prizeRank!) - priority(b.prizeRank!);
+    })[0];
+    const isHighPrize =
+      bestResult?.prizeRank === 1 ||
+      bestResult?.prizeRank === 2 ||
+      bestResult?.prizeRank === 8;
+    const title = isHighPrize
+      ? `🚨🎉 <b>${data.drawId}회 연금복권 고액 당첨!</b>`
+      : bestResult
+        ? `🎉 <b>${data.drawId}회 연금복권 당첨을 축하합니다!</b>`
+        : `🎱 <b>${data.drawId}회 연금복권 결과</b>`;
+
     const lines: string[] = [
-      `🎱 <b>${data.drawId}회 연금복권 당첨 결과</b>`,
+      title,
       '',
       `당첨번호: <b>${winningStr}</b>`,
+      `보너스번호: <b>${data.winningBonusDigits ?? '(미등록)'}</b>`,
       '',
       '━━━━━━━━━━━━━━━━━━━━━━━━━',
     ];
@@ -467,23 +518,27 @@ export class TelegramService implements OnModuleInit {
 
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━');
 
-    const bestResult = data.results.reduce(
-      (best, curr) =>
-        curr.prizeRank != null &&
-        (best == null || curr.prizeRank < best.prizeRank!)
-          ? curr
-          : best,
-      data.results[0] as (typeof data.results)[0] | undefined,
-    );
-
     if (bestResult?.prizeRank) {
+      lines.push(`🎊 당첨 ${winningResults.length}/${data.results.length}게임`);
       lines.push(
-        `🏆 이번 회 최고: ${bestResult.prizeRank}등 (${bestResult.gameNumber}번 게임)`,
+        `🏆 최고 ${bestResult.prizeRank}등 (${bestResult.gameNumber}번 게임)`,
       );
+      const recurringPrize = this.getPensionRecurringPrize(
+        bestResult.prizeRank,
+      );
+      if (recurringPrize) lines.push(`💰 당첨금: <b>${recurringPrize}</b>`);
+      lines.push('⚠️ 복권을 안전하게 보관하고 공식 당첨 결과를 확인하세요.');
     } else {
-      lines.push('🏆 이번 회: 낙첨');
+      lines.push('🍀 이번 회는 아쉽게 낙첨');
+      lines.push('다음 회차도 무리하지 않는 선에서 행운을 빌어요!');
     }
 
     return lines.join('\n');
+  }
+
+  private getPensionRecurringPrize(rank: number): string | null {
+    if (rank === 1) return '월 700만원 × 20년';
+    if (rank === 2 || rank === 8) return '월 100만원 × 10년';
+    return null;
   }
 }
