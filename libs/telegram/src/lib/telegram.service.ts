@@ -129,6 +129,12 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
   onModuleInit(): void {
     if (this.isEnabled) {
       this.logger.log('Telegram bot initialized');
+      this.bot?.catch((error: unknown) => {
+        this.logger.error(
+          'Failed to process Telegram update',
+          error instanceof Error ? error.message : String(error),
+        );
+      });
       this.registerPurchaseCallbacks();
       if (this.updatesEnabled && this.bot) {
         void this.bot.launch().catch((error) => {
@@ -407,7 +413,24 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
         status === PurchaseStatus.CONFIRMED
           ? '✅ 구매 완료로 기록했습니다.'
           : '⏭ 이번 회차를 건너뜁니다.';
-      await context.answerCbQuery(text);
+      try {
+        await context.answerCbQuery(text);
+      } catch (error) {
+        // Queued clicks can expire while the app is offline. The purchase is
+        // already saved, so still update the message and keep polling alive.
+        const response = (error as {
+          response?: { error_code?: number; description?: string };
+        })?.response;
+        if (
+          response?.error_code !== 400 ||
+          !response.description?.includes('query is too old')
+        ) {
+          throw error;
+        }
+        this.logger.warn(
+          `Expired purchase callback for ${lotteryType} #${drawId}`,
+        );
+      }
       await context.editMessageReplyMarkup({
         inline_keyboard: [],
       });
@@ -512,6 +535,18 @@ export class TelegramService implements OnModuleInit, OnModuleDestroy {
     }
 
     lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    const giftResults = data.results.filter((r) => r.type === 'GIFT');
+    if (giftResults.length > 0) {
+      lines.push('🎁 <b>선물 받은 복권:</b>');
+      for (const r of giftResults) {
+        const prizeText = this.getLottoPrizeText(r.prizeRank, data.prizeByRank);
+        lines.push(
+          `${this.getGameEmoji(r.gameNumber)} ${r.numbers.join(', ')} → ${r.matchedCount}개${prizeText}`,
+        );
+      }
+      lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
 
     const bestResult = winningResults.sort(
       (a, b) => a.prizeRank! - b.prizeRank!,

@@ -177,6 +177,9 @@ export class GenerateRecommendationHandler
     targetDrawId: number,
     recommendations: Recommendation[],
   ): GenerateRecommendationResult {
+    recommendations = recommendations.filter(
+      (recommendation) => recommendation.type !== RecommendationType.GIFT,
+    );
     if (recommendations.length !== 5) {
       throw new Error(
         `Draw #${targetDrawId} has an incomplete recommendation set (${recommendations.length}/5)`,

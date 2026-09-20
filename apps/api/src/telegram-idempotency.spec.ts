@@ -81,39 +81,44 @@ describe('TelegramService delivery idempotency', () => {
     );
   });
 
-  it('sends a celebratory lotto summary with the expected total prize', async () => {
-    const { service, sendMessage } = createService(true);
+  it.each(['STATISTICAL', 'GIFT'])(
+    'includes %s games and their prize in the result',
+    async (type) => {
+      const { service, sendMessage } = createService(true);
 
-    await service.sendResult({
-      drawId: 301,
-      winningNumbers: [1, 2, 3, 4, 5, 6],
-      bonusNumber: 7,
-      prizeByRank: {
-        1: '1000000000',
-        2: '50000000',
-        3: '1500000',
-        4: '50000',
-        5: '5000',
-      },
-      results: [
-        {
-          gameNumber: 1,
-          type: 'STATISTICAL',
-          numbers: [1, 2, 3, 10, 11, 12],
-          matchedCount: 3,
-          matchedNumbers: [1, 2, 3],
-          hasBonus: false,
-          prizeRank: 5,
+      await service.sendResult({
+        drawId: 301,
+        winningNumbers: [1, 2, 3, 4, 5, 6],
+        bonusNumber: 7,
+        prizeByRank: {
+          1: '1000000000',
+          2: '50000000',
+          3: '1500000',
+          4: '50000',
+          5: '5000',
         },
-      ],
-    });
+        results: [
+          {
+            gameNumber: 1,
+            type,
+            numbers: [1, 2, 3, 10, 11, 12],
+            matchedCount: 3,
+            matchedNumbers: [1, 2, 3],
+            hasBonus: false,
+            prizeRank: 5,
+          },
+        ],
+      });
 
-    const calls = sendMessage.mock.calls as unknown as [string, string][];
-    const message = calls[0][1];
-    expect(message).toContain('당첨을 축하합니다');
-    expect(message).toContain('예상 총 당첨금: <b>5,000원</b>');
-    expect(message).toContain('공식 당첨 결과');
-  });
+      const calls = sendMessage.mock.calls as unknown as [string, string][];
+      const message = calls[0][1];
+      expect(message).toContain('당첨을 축하합니다');
+      expect(message).toContain('예상 총 당첨금: <b>5,000원</b>');
+      expect(message).toContain('공식 당첨 결과');
+      expect(message).toContain('1, 2, 3, 10, 11, 12');
+      if (type === 'GIFT') expect(message).toContain('선물 받은 복권');
+    },
+  );
 
   it('announces a pension bonus prize and its recurring payout', async () => {
     const { service, sendMessage } = createService(true);
