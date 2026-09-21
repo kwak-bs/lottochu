@@ -16,6 +16,8 @@ export enum RecommendationType {
   STATISTICAL = 'STATISTICAL',
   /** AI 기반 추천 (Ollama) */
   AI = 'AI',
+  /** 사용자가 선물 받은 복권 */
+  GIFT = 'GIFT',
 }
 
 /**

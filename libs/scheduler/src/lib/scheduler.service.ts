@@ -21,6 +21,7 @@ import {
   RecommendationMessage,
   ResultMessage,
   PensionResultMessage,
+  LotteryType,
 } from '@lottochu/telegram';
 import { getNextSaturday, getNextThursday } from '@lottochu/shared';
 
@@ -36,6 +37,28 @@ export class SchedulerService {
     private readonly pensionRecommendationRepository: PensionRecommendationRepository,
     private readonly telegramService: TelegramService,
   ) {}
+
+  @Cron('0 18 * * 5', {
+    name: 'lotto-purchase-reminder',
+    timeZone: 'Asia/Seoul',
+  })
+  async handleLottoPurchaseReminder(): Promise<void> {
+    const count = await this.telegramService.sendPendingPurchaseReminders(
+      LotteryType.LOTTO,
+    );
+    this.logger.log(`Sent ${count} lotto purchase reminder(s)`);
+  }
+
+  @Cron('0 18 * * 3', {
+    name: 'pension-purchase-reminder',
+    timeZone: 'Asia/Seoul',
+  })
+  async handlePensionPurchaseReminder(): Promise<void> {
+    const count = await this.telegramService.sendPendingPurchaseReminders(
+      LotteryType.PENSION,
+    );
+    this.logger.log(`Sent ${count} pension purchase reminder(s)`);
+  }
 
   /**
    * 매주 월요일 오후 12시 30분 - 로또 추천 번호 생성 및 발송
